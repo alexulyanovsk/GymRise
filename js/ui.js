@@ -1,7 +1,9 @@
 /**
+ * GymRise
  * Файл: js/ui.js
- * Версия: 13.1.1
- * Описание: Исправлено удаление блока опыта со второго экрана генератора.
+ * Версия: 15.0.0
+ * Автор и правообладатель: © Alexulyanovsk
+ * Описание: Интегрирована генерация карточки для шеринга.
  */
 
 import {
@@ -12,6 +14,7 @@ import { M, EX_ENTRIES, EXERCISES, LIMITS } from './data.js';
 import { $, e, fn, pn, rs, ws, fd } from './utils.js';
 import { tg, haptic, hapticNotify, uiConfirm, uiAlert, enableCloseConfirm, disableCloseConfirm } from './bridge.js';
 import { generatePlan } from './generator.js';
+import { generateShareCard } from './share.js'; // Подключаем модуль шеринга
 
 let restTicker = null;
 let lastMainBtnAt = 0;
@@ -19,6 +22,7 @@ let lastSyncKey = '';
 let prevRenderKey = '';
 let doneSetRunning = false;
 let csvExportRunning = false;
+let shareRunning = false; // Защита от двойного клика
 let generatorOptions = { goal: 'hypertrophy', days: 4, equipment: ['barbell', 'dumbbell', 'machine'], excludedGroups: [] };
 
 const ICON = {
@@ -35,6 +39,7 @@ const ICON = {
   trash: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
   check: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
   sparkles: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path><path d="M5 3v4"></path><path d="M19 17v4"></path><path d="M3 5h4"></path><path d="M17 19h4"></path></svg>`,
+  share: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>`,
   dumbbell: `<svg width="120" height="120" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <mask id="holeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
@@ -125,6 +130,13 @@ export function render() {
   document.getElementById('newDayDialogBackdrop')?.remove();
   document.getElementById('generatorDialogBackdrop')?.remove();
 
+  if (!document.querySelector('.dev-signature')) {
+    const sig = document.createElement('div');
+    sig.className = 'dev-signature';
+    sig.textContent = '© Alexulyanovsk';
+    document.body.appendChild(sig);
+  }
+
   if (state.pendingAdd) {
     const dHtml = renderAddDialog();
     if (dHtml) document.body.insertAdjacentHTML('beforeend', dHtml);
@@ -158,7 +170,7 @@ export function render() {
   }
 
   if (state.screen === 'workout') {
-    const wIn = $('wInput'), rIn = $('rInput'), nIn = $('noteInput');
+    const wIn = $('wInput'), rIn = $('rInput');
     if (wIn) {
       wIn.addEventListener('input', ev => {
         const v = ev.target.value.trim();
@@ -176,10 +188,6 @@ export function render() {
         if (isFinite(n)) state.workout.currentReps = n;
       });
       rIn.addEventListener('change', () => { if (state.workout) saveState(); });
-    }
-    if (nIn) {
-      nIn.addEventListener('input', ev => { if (state.workout) state.workout.currentNote = ev.target.value; });
-      nIn.addEventListener('change', () => { if (state.workout) saveState(); });
     }
   }
   syncTelegramUI(); updateRestUI();
@@ -256,7 +264,7 @@ function renderMenu() {
   if (!hasPlans) {
     return `
       <div class="menu-header" style="text-align: center;">
-        <h1 style="margin-bottom: 4px;">GymPlan</h1>
+        <h1 style="margin-bottom: 4px;">GymRise</h1>
         <p class="dim small" style="font-weight:500; margin:0;">Умный трекер тренировок</p>
       </div>
       
@@ -333,7 +341,7 @@ function renderMenu() {
 
   return `
     <div class="menu-header">
-      <h1>GymPlan</h1>
+      <h1>GymRise</h1>
       <p class="dim small" style="font-weight:500; margin:0;">Ваша программа</p>
     </div>
     
@@ -379,7 +387,7 @@ function renderWorkout() {
   const wState = state.weights[exId];
   const targetReps = wState?.targetReps || ex.repMin;
   const streak = wState?.streak || 0;
-  const streakDots = '●'.repeat(streak) + '○'.repeat(Math.max(0, 2 - streak));
+  const streakText = `[${streak}/2]`;
   
   const lastBlock = last && last.length > 0
     ? `<div class="last-block">Прошлый раз: ${e(last.map(s => isBW ? `${s.reps}с` : `${fn(s.weight)}×${s.reps}`).join(', '))}</div>` : '';
@@ -413,7 +421,7 @@ function renderWorkout() {
         <div>
           <div class="progress-label">Упражнение ${w.exIdx + 1} из ${day.exercises.length}</div>
           <div class="ex-title">${e(ex.name)}</div>
-          <div class="ex-meta">${ex.sets} × ${targetReps} <span class="streak-dots">${streakDots}</span> · старт: ${e(ws(ex))}</div>
+          <div class="ex-meta">${ex.sets} × ${targetReps} <span class="streak-dots">${streakText}</span></div>
         </div>
         <button class="close-btn" data-action="cancelWorkout" aria-label="Выйти">${ICON.x}</button>
       </div>
@@ -437,8 +445,6 @@ function renderWorkout() {
         </div>
         <button class="circle-btn" data-action="incR">+</button>
       </div>
-      
-      <input type="text" class="note-input" id="noteInput" maxlength="500" placeholder="Заметка к упражнению..." value="${e(w.currentNote || '')}">
       
       <button class="btn btn-primary" data-action="${primaryAction}">${primaryLabel}</button>
       ${extraBtn}
@@ -471,6 +477,7 @@ function renderComplete() {
     <div class="card" style="background:var(--surface); padding:20px; border-radius:var(--radius-md); border:var(--border); margin-bottom:24px;">
       ${summary || '<div class="dim">Нет данных</div>'}
     </div>
+    <button class="btn btn-primary" data-action="shareWorkout" style="background:rgba(204,255,0,0.1); color:var(--accent); border:1px solid var(--accent); margin-bottom: 8px;">${ICON.share} Поделиться результатом</button>
     ${nid ? `<button class="btn btn-primary" data-action="nextDay" data-id="${e(nid)}">Следующий день ${ICON.arrowRight}</button>` : ''}
     <button class="btn btn-secondary mt-10" data-action="goMenu">В меню</button>
   `;
@@ -934,7 +941,7 @@ async function doneSet() {
     const exId = day.exercises[w.exIdx];
     const ex = getExScheme(w.dayId, exId);
     if (!ex) return;
-    const wI = $('wInput'), rI = $('rInput'), nI = $('noteInput');
+    const wI = $('wInput'), rI = $('rInput');
     const isBW = ex.unit === 'свой вес';
     const rawW = wI ? wI.value : String(w.currentWeight);
     const weight = isBW ? 0 : pn(rawW);
@@ -942,7 +949,6 @@ async function doneSet() {
     if (!isBW && (!isFinite(weight) || weight < 0)) { uiAlert('Введите корректный вес'); return; }
     if (!isFinite(reps) || reps < 1) { uiAlert('Введите корректное число повторов'); return; }
 
-    if (nI) w.currentNote = nI.value;
     w.currentWeight = weight; w.currentReps = reps;
     w.tempSets.push({ weight, reps });
     if (isBW) delete state.weights[exId];
@@ -1324,13 +1330,13 @@ async function exportCsv() {
         csv += `"${fd(h.ts)}";"${dayTitle}";"${name}";${i + 1};${s.weight};${s.reps};"${note}"\n`;
       });
     }));
-    const filename = 'gymplan_' + Date.now() + '.csv';
+    const filename = 'gymrise_' + Date.now() + '.csv';
 
     if (typeof File !== 'undefined' && navigator.canShare && navigator.share) {
       try {
         const file = new File(['\ufeff' + csv], filename, { type: 'text/csv;charset=utf-8' });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'GymPlan export' });
+          await navigator.share({ files: [file], title: 'GymRise export' });
           return;
         }
       } catch (err) {
@@ -1428,5 +1434,25 @@ export const ACTIONS = {
   addExFromDayEdit: () => addExFromDayEdit(),
   moveEx: el => moveExercise(el.dataset.day, Number(el.dataset.idx), Number(el.dataset.dir)),
   removeExFromDayEdit: el => removeExFromDayEdit(el.dataset.day, Number(el.dataset.idx)),
-  deleteDay: el => deleteDay(el.dataset.id)
+  deleteDay: el => deleteDay(el.dataset.id),
+  
+  // Кнопка "Поделиться" на экране завершения тренировки
+  shareWorkout: async () => {
+    if (shareRunning) return;
+    shareRunning = true;
+    try {
+      const h = state.history[0];
+      if (h) {
+        await generateShareCard(h);
+        hapticNotify('success');
+      }
+    } catch (err) {
+      console.error(err);
+      uiAlert('Не удалось создать карточку');
+    } finally {
+      shareRunning = false;
+    }
+  }
 };
+
+/* © Alexulyanovsk */
