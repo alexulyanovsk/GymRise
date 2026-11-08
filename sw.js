@@ -1,11 +1,11 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 62.0.0
+ * Версия: 63.0.0
  * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymrise-v62';
+const CACHE_NAME = 'gymrise-v63';
 
 const APP_SHELL = [
   './',
