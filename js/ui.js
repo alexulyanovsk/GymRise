@@ -1,13 +1,12 @@
 /**
  * Файл: js/ui.js
- * Версия: 12.1.0
- * Описание: Финальная сборка. Точечный update в doneSet (GIF не перезапускается),
- *           scroll через #app.scrollTop, libFilter сохраняется,
- *           кнопка "Завершить тренировку" на последнем упражнении.
+ * Версия: 13.0.0
+ * Описание: Онбординг, персонализация стартового веса, ступенчатая прогрессия 8/10/12,
+ *           опрос RIR после 12 повторений, досрочное повышение веса.
  */
 
 import {
-  state, saveState, getCurrentEx, getLastAttempt, progressionHint, startValues,
+  state, saveState, getCurrentEx, getLastAttempt, startValues,
   getInDays, exportData, invalidatePlanCaches, invalidateHistoryCaches, getExScheme
 } from './state.js';
 import { M, EX_ENTRIES, EXERCISES, LIMITS } from './data.js';
@@ -93,7 +92,7 @@ export function initBridgeEvents() {
 export function render() {
   const app = $('app');
   if (!app) return;
-  const scrollTop = app.scrollTop;   // ← #app, не window
+  const scrollTop = app.scrollTop;
 
   if (state.screen === 'complete') {
     const h0 = state.history[0];
@@ -135,12 +134,15 @@ export function render() {
     document.body.insertAdjacentHTML('beforeend', renderNewDayDialog());
   }
   if (state.generatorOpen) {
-    document.body.insertAdjacentHTML('beforeend', renderGeneratorDialog());
+    if (!state.profile.onboarded) {
+      document.body.insertAdjacentHTML('beforeend', renderGeneratorOnboarding());
+    } else {
+      document.body.insertAdjacentHTML('beforeend', renderGeneratorDialog());
+    }
   }
 
   document.body.classList.toggle('modal-open', !!state.pendingAdd || !!state.newDayOpen || !!state.generatorOpen || !!$('csvModalBackdrop'));
 
-  // Восстановление скролла для #app
   if (renderKey === prevRenderKey && scrollTop > 0 && ['library', 'history', 'dayEdit', 'menu', 'complete'].includes(state.screen)) {
     requestAnimationFrame(() => { app.scrollTop = scrollTop; });
   }
@@ -184,10 +186,6 @@ export function render() {
   syncTelegramUI(); updateRestUI();
 }
 
-/**
- * Точечное обновление workout-экрана при добавлении подхода.
- * НЕ трогает .gif-block → GIF не перезапускается.
- */
 function refreshWorkoutUI() {
   const w = state.workout; if (!w) return;
   const day = state.plans[w.dayId]; if (!day) return;
@@ -378,10 +376,15 @@ function renderWorkout() {
   const allDone = w.tempSets.length >= ex.sets;
   const extra = Math.max(0, w.tempSets.length - ex.sets);
   const last = getLastAttempt(exId);
-  const prog = progressionHint(w.dayId, exId);
+  
+  // Прогрессия из state.weights
+  const wState = state.weights[exId];
+  const targetReps = wState?.targetReps || ex.repMin;
+  const streak = wState?.streak || 0;
+  const streakDots = '●'.repeat(streak) + '○'.repeat(Math.max(0, 2 - streak));
+  
   const lastBlock = last && last.length > 0
     ? `<div class="last-block">Прошлый раз: ${e(last.map(s => isBW ? `${s.reps}с` : `${fn(s.weight)}×${s.reps}`).join(', '))}</div>` : '';
-  const hintBlock = prog ? `<div class="hint-block">${e(prog)}</div>` : '';
   const gifHtml = ex.gif
     ? `<div class="gif-block"><img src="${e(ex.gif)}" alt="${e(ex.name)}" referrerpolicy="no-referrer"><div class="gif-placeholder">🏋️</div></div>`
     : `<div class="gif-block no-gif"><div class="gif-placeholder">🏋️</div></div>`;
@@ -412,7 +415,7 @@ function renderWorkout() {
         <div>
           <div class="progress-label">Упражнение ${w.exIdx + 1} из ${day.exercises.length}</div>
           <div class="ex-title">${e(ex.name)}</div>
-          <div class="ex-meta">${ex.sets} × ${rs(ex)} · старт: ${e(ws(ex))}</div>
+          <div class="ex-meta">${ex.sets} × ${targetReps} <span style="color:var(--accent); letter-spacing:3px; font-size:14px;">${streakDots}</span> · старт: ${e(ws(ex))}</div>
         </div>
         <button class="close-btn" data-action="cancelWorkout" aria-label="Выйти">${ICON.x}</button>
       </div>
@@ -421,7 +424,6 @@ function renderWorkout() {
     <div class="workout-body">
       ${gifHtml}
       <div class="note-block">${e(ex.note)}</div>
-      ${hintBlock}
       ${lastBlock}
     </div>
     
@@ -605,6 +607,41 @@ function renderNewDayDialog() {
   return `<div class="modal-backdrop" id="newDayDialogBackdrop"><div class="modal"><h3>Новый день</h3><input type="text" class="modal-input" id="newDayNameInput" maxlength="50" placeholder="Название дня..." value="${e(state.newDayName || '')}"><button class="btn btn-primary" data-action="createNewDay">Создать</button><button class="btn btn-secondary btn-small mt-10" data-action="closeNewDay">Отмена</button></div></div>`;
 }
 
+function renderGeneratorOnboarding() {
+  const p = state.profile;
+  return `<div class="modal-backdrop" id="generatorDialogBackdrop">
+    <div class="modal">
+      <h3 style="margin-bottom:16px;">Расскажите о себе</h3>
+      <p class="dim small" style="margin-bottom:20px;">Это нужно один раз — чтобы подобрать безопасный стартовый вес.</p>
+
+      <div style="margin-bottom:12px;">
+        <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Пол</div>
+        <div class="chips">
+          <button class="chip ${p.gender === 'male' ? 'active' : ''}" data-action="profileSetGender" data-val="male">Мужчина</button>
+          <button class="chip ${p.gender === 'female' ? 'active' : ''}" data-action="profileSetGender" data-val="female">Девушка</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Вес тела (кг)</div>
+        <input type="number" class="modal-input" id="profileBodyWeight" value="${p.bodyWeight}" min="30" max="200" step="0.5" inputmode="decimal" placeholder="80">
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Опыт</div>
+        <div class="chips">
+          <button class="chip ${p.exp === 'beginner' ? 'active' : ''}" data-action="profileSetExp" data-val="beginner">Новичок</button>
+          <button class="chip ${p.exp === 'intermediate' ? 'active' : ''}" data-action="profileSetExp" data-val="intermediate">Средний</button>
+          <button class="chip ${p.exp === 'advanced' ? 'active' : ''}" data-action="profileSetExp" data-val="advanced">Профи</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" data-action="profileNext">Далее</button>
+      <button class="btn btn-secondary btn-small mt-10" data-action="closeGenerator">Отмена</button>
+    </div>
+  </div>`;
+}
+
 function renderGeneratorDialog() {
   const groups = ['Грудь', 'Спина', 'Плечи', 'Руки', 'Ноги'];
   const groupChips = groups.map(g => {
@@ -615,7 +652,7 @@ function renderGeneratorDialog() {
   return `<div class="modal-backdrop" id="generatorDialogBackdrop">
     <div class="modal">
       <h3 style="margin-bottom:16px;">Умный генератор</h3>
-      
+
       <div style="margin-bottom:12px;">
         <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Цель</div>
         <div class="chips">
@@ -664,6 +701,7 @@ function renderGeneratorDialog() {
 
       <button class="btn btn-primary" data-action="generatePlanAction">Создать программу</button>
       <button class="btn btn-secondary btn-small mt-10" data-action="closeGenerator">Отмена</button>
+      <button class="btn btn-secondary btn-small mt-10" data-action="profileReset" style="opacity:0.6;">← Изменить профиль</button>
     </div>
   </div>`;
 }
@@ -744,6 +782,137 @@ function updateRestUI() {
   }
 }
 
+// --- Модалка «Как прошли 12 повторений?» и досрочная прогрессия ---
+function showEffortDialog() {
+  if (document.getElementById('effortDialog')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-backdrop" id="effortDialog" style="z-index:9999; align-items:center; padding:20px;">
+      <div class="modal" style="border-radius:24px; max-width:320px; text-align:center;">
+        <h3 style="margin-bottom:16px;">Как прошли 12 повторений?</h3>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button class="btn btn-secondary" data-effort="easy">😌 Легко</button>
+          <button class="btn btn-secondary" data-effort="normal">😤 Нормально</button>
+          <button class="btn btn-secondary" data-effort="hard">🥵 Тяжело</button>
+        </div>
+      </div>
+    </div>
+  `);
+  document.getElementById('effortDialog').addEventListener('click', ev => {
+    const btn = ev.target.closest('[data-effort]');
+    if (!btn) return;
+    handleEffortResult(btn.dataset.effort);
+  });
+}
+
+function handleEffortResult(effort) {
+  const d = document.getElementById('effortDialog');
+  if (d) d.remove();
+  const w = state.workout;
+  if (!w) return;
+  w.effortAsked = true;
+
+  if (effort === 'easy') {
+    showWeightIncreaseDialog();
+  } else {
+    startRest(LIMITS.restSec);
+    refreshWorkoutUI();
+    saveState();
+  }
+}
+
+function showWeightIncreaseDialog() {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-backdrop" id="weightIncreaseDialog" style="z-index:9999; align-items:center; padding:20px;">
+      <div class="modal" style="border-radius:24px; max-width:340px; text-align:center;">
+        <h3 style="margin-bottom:12px;">Вес стал лёгким?</h3>
+        <p class="dim small" style="margin-bottom:16px;">Поднять вес сейчас? Следующие подходы пойдут с новым весом и целью 8 повторений.</p>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary" data-answer="no" style="flex:1;">Нет</button>
+          <button class="btn btn-primary" data-answer="yes" style="flex:1;">Да</button>
+        </div>
+      </div>
+    </div>
+  `);
+  document.getElementById('weightIncreaseDialog').addEventListener('click', ev => {
+    const btn = ev.target.closest('[data-answer]');
+    if (!btn) return;
+    if (btn.dataset.answer === 'yes') {
+      increaseWeightEarly();
+    } else {
+      document.getElementById('weightIncreaseDialog')?.remove();
+      startRest(LIMITS.restSec);
+      refreshWorkoutUI();
+      saveState();
+    }
+  });
+}
+
+function increaseWeightEarly() {
+  document.getElementById('weightIncreaseDialog')?.remove();
+  const w = state.workout;
+  if (!w) return;
+  const day = state.plans[w.dayId];
+  if (!day) return;
+  const exId = day.exercises[w.exIdx];
+  const ex = getExScheme(w.dayId, exId);
+  if (!ex) return;
+
+  const inc = ex.inc || 2.5;
+  const newWeight = w.currentWeight + inc;
+
+  if (!state.weights[exId]) {
+    state.weights[exId] = { weight: newWeight, targetReps: ex.repMin, streak: 0 };
+  } else {
+    state.weights[exId].weight = newWeight;
+    state.weights[exId].targetReps = ex.repMin;
+    state.weights[exId].streak = 0;
+  }
+  w.currentWeight = newWeight;
+  w.currentReps = ex.repMin;
+
+  saveState();
+  render();
+  startRest(LIMITS.restSec);
+  hapticNotify('success');
+}
+
+// --- Прогрессия при завершении упражнения ---
+function applyProgression(exId, ex, tempSets) {
+  if (ex.unit === 'свой вес') return null;
+  const wState = state.weights[exId];
+  if (!wState) return null;
+
+  const allSuccess = tempSets.every(s => s.reps >= wState.targetReps);
+  if (!allSuccess) {
+    wState.streak = 0;
+    return null;
+  }
+
+  wState.streak = (wState.streak || 0) + 1;
+
+  if (wState.streak < 2) {
+    return `🔥 Отлично! Ещё одна успешная сессия на ${wState.targetReps} повторений — и перейдём на следующую ступень.`;
+  }
+
+  if (wState.targetReps < ex.repMax) {
+    let newTarget;
+    if (wState.targetReps <= ex.repMin) newTarget = 10;
+    else if (wState.targetReps <= 10) newTarget = 12;
+    else newTarget = ex.repMax;
+    if (newTarget > ex.repMax) newTarget = ex.repMax;
+
+    wState.targetReps = newTarget;
+    wState.streak = 0;
+    return `🚀 Ступень пройдена! В следующий раз: ${ex.sets} × ${newTarget}.`;
+  }
+
+  const inc = ex.inc || 2.5;
+  wState.weight += inc;
+  wState.targetReps = ex.repMin;
+  wState.streak = 0;
+  return `🎯 Максимум взят! В следующий раз: ${wState.weight} ${ex.unit}, ${ex.sets} × ${ex.repMin}.`;
+}
+
 async function beginWorkout(id) {
   if (!state.plans[id]) return;
   if (state.workout && state.workout.dayId !== id) {
@@ -759,7 +928,7 @@ async function beginWorkout(id) {
   state.workout = {
     dayId: id, exIdx: 0, tempSets: [],
     currentWeight: sv.weight, currentReps: sv.reps,
-    currentNote: '', results: []
+    currentNote: '', results: [], effortAsked: false
   };
   state.currentDayId = id; state.screen = 'workout'; state.rest = null;
   enableCloseConfirm();
@@ -790,12 +959,30 @@ async function doneSet() {
     w.currentWeight = weight; w.currentReps = reps;
     w.tempSets.push({ weight, reps });
     if (isBW) delete state.weights[exId];
-    else state.weights[exId] = { weight, reps };
+    else {
+      if (!state.weights[exId]) {
+        state.weights[exId] = { weight, targetReps: ex.repMin, streak: 0 };
+      } else {
+        state.weights[exId].weight = weight;
+      }
+    }
     haptic('medium');
     saveState();
-    startRest(LIMITS.restSec);
-    // Точечный апдейт, GIF не перезапускается
-    refreshWorkoutUI();
+
+    // Проверка на 12 повторений и запрос RIR
+    const targetReps = state.weights[exId]?.targetReps || ex.repMin;
+    const wantEffortAsk = !isBW
+      && !w.effortAsked
+      && reps >= ex.repMax
+      && targetReps < ex.repMax
+      && w.tempSets.length < ex.sets;
+
+    if (wantEffortAsk) {
+      showEffortDialog();
+    } else {
+      startRest(LIMITS.restSec);
+      refreshWorkoutUI();
+    }
   } finally { doneSetRunning = false; }
 }
 
@@ -807,12 +994,23 @@ function advanceExercise() {
   const day = state.plans[w.dayId]; if (!day) return;
   const exId = day.exercises[w.exIdx];
   const ex = getExScheme(w.dayId, exId);
-  if (ex && w.tempSets.length > 0) w.results.push({ id: exId, name: ex.name, sets: w.tempSets.slice(), note: w.currentNote || '' });
-  w.tempSets = []; w.currentNote = ''; w.exIdx++;
-  if (w.exIdx >= day.exercises.length) { finishWorkout(); return; }
+
+  let progressMsg = null;
+  if (ex && w.tempSets.length > 0) {
+    w.results.push({ id: exId, name: ex.name, sets: w.tempSets.slice(), note: w.currentNote || '' });
+    progressMsg = applyProgression(exId, ex, w.tempSets);
+  }
+  w.tempSets = []; w.currentNote = ''; w.exIdx++; w.effortAsked = false;
+
+  if (w.exIdx >= day.exercises.length) {
+    finishWorkout();
+    if (progressMsg) setTimeout(() => uiAlert(progressMsg), 200);
+    return;
+  }
   const sv = startValues(w.dayId, day.exercises[w.exIdx]);
   w.currentWeight = sv.weight; w.currentReps = sv.reps; state.rest = null;
   haptic('light'); saveState(); render();
+  if (progressMsg) setTimeout(() => uiAlert(progressMsg), 200);
 }
 
 function skipExercise() {
@@ -825,8 +1023,11 @@ function skipExercise() {
   const ex = getExScheme(w.dayId, exId);
   if (ex && w.tempSets.length > 0) {
     w.results.push({ id: exId, name: ex.name, sets: w.tempSets.slice(), note: w.currentNote || '' });
+    // Не применяем прогрессию при пропуске
+    const wS = state.weights[exId];
+    if (wS) wS.streak = 0;
   }
-  w.tempSets = []; w.currentNote = ''; w.exIdx++;
+  w.tempSets = []; w.currentNote = ''; w.exIdx++; w.effortAsked = false;
   if (w.exIdx >= day.exercises.length) { finishWorkout(); return; }
   const sv = startValues(w.dayId, day.exercises[w.exIdx]);
   w.currentWeight = sv.weight; w.currentReps = sv.reps; state.rest = null;
@@ -924,6 +1125,42 @@ function toggleExcludeGroup(el) {
   }
 }
 
+// --- Онбординг профиля ---
+function profileSetGender(el) {
+  state.profile.gender = el.dataset.val;
+  document.querySelectorAll('[data-action="profileSetGender"]').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === state.profile.gender);
+  });
+  saveState();
+}
+
+function profileSetExp(el) {
+  state.profile.exp = el.dataset.val;
+  document.querySelectorAll('[data-action="profileSetExp"]').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === state.profile.exp);
+  });
+  saveState();
+}
+
+function profileNext() {
+  const bwInput = document.getElementById('profileBodyWeight');
+  const bw = Number(bwInput?.value);
+  if (!Number.isFinite(bw) || bw < 30 || bw > 200) {
+    uiAlert('Введите корректный вес (30–200 кг)');
+    return;
+  }
+  state.profile.bodyWeight = bw;
+  state.profile.onboarded = true;
+  saveState();
+  render();
+}
+
+function profileReset() {
+  state.profile.onboarded = false;
+  saveState();
+  render();
+}
+
 async function applyGeneratedPlan() {
   if (state.workout && state.workout.dayId && state.workout.dayId.startsWith('gen_')) {
     const ok = await uiConfirm('Активная тренировка будет прервана. Продолжить?');
@@ -949,6 +1186,20 @@ async function applyGeneratedPlan() {
     if (id.startsWith('gen_')) delete state.plans[id];
   }
   Object.assign(state.plans, newPlans);
+
+  // Сброс прогрессии под новые схемы (сохраняем вес, сбрасываем targetReps и streak)
+  for (const [dayId, day] of Object.entries(newPlans)) {
+    for (const exId of day.exercises) {
+      const ex = EXERCISES[exId];
+      if (!ex) continue;
+      const ws = state.weights[exId];
+      if (ws) {
+        ws.targetReps = ex.repMin;
+        ws.streak = 0;
+      }
+    }
+  }
+
   state.generatorOpen = false;
   invalidatePlanCaches();
   saveState(); render();
@@ -1155,6 +1406,10 @@ export const ACTIONS = {
   genSetDays: el => { generatorOptions.days = Number(el.dataset.val); document.querySelectorAll('[data-action="genSetDays"]').forEach(b => b.classList.toggle('active', b.dataset.val === el.dataset.val)); },
   genToggleEq: el => toggleEq(el),
   genToggleExclude: el => toggleExcludeGroup(el),
+  profileSetGender: el => profileSetGender(el),
+  profileSetExp: el => profileSetExp(el),
+  profileNext: () => profileNext(),
+  profileReset: () => profileReset(),
   exportCsv: () => exportCsv(),
   copyCsv: async () => {
     if (!csvModalData) return;
