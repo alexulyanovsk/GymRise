@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Убран список упражнений, увеличен тоннаж за всю тренировку, большая карта мышц.
+ * Описание: Версия 2. Убран список, добавлена метка v2 для отладки.
  */
 
 import { EXERCISES } from './data.js';
@@ -25,14 +25,13 @@ export async function generateShareCard(historyItem) {
   ctx.fillStyle = '#09090B';
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // Легкий градиент в углу
   const gradient = ctx.createRadialGradient(1080, 0, 0, 1080, 0, 800);
   gradient.addColorStop(0, 'rgba(204, 255, 0, 0.15)');
   gradient.addColorStop(1, 'rgba(9, 9, 11, 0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 2. Твой оригинальный логотип
+  // 2. Логотип
   try {
     const logo = await loadImage('./icon.svg');
     ctx.drawImage(logo, 440, 100, 200, 200);
@@ -53,13 +52,12 @@ export async function generateShareCard(historyItem) {
   ctx.font = '500 40px Manrope, sans-serif';
   ctx.fillText(historyItem.dayTitle || 'Тренировка', 540, 450);
 
-  // 4. Дата
   const date = new Date(historyItem.ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 36px Manrope, sans-serif';
   ctx.fillText(date, 540, 520);
 
-  // 5. Общий тоннаж за ВСЮ тренировку
+  // 4. Общий тоннаж
   let startY = 680;
   ctx.textAlign = 'left';
   
@@ -79,7 +77,7 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 120px Manrope, sans-serif';
   ctx.fillText(`${Math.round(totalVolume)} кг`, 100, startY + 110);
 
-  // 6. Карта нагруженных мышц (теперь она занимает центр)
+  // 5. Карта нагруженных мышц
   const hitMuscles = new Set();
   historyItem.exercises.forEach(ex => {
     const base = EXERCISES[ex.id];
@@ -88,7 +86,7 @@ export async function generateShareCard(historyItem) {
 
   drawMuscleMap(ctx, hitMuscles);
 
-  // 7. Футер
+  // 6. Футер
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 32px Manrope, sans-serif';
@@ -98,7 +96,13 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 8. Конвертация и шеринг
+  // 7. ОТЛАДОЧНАЯ МЕТКА (Чтобы понять, что файл обновился)
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#333333';
+  ctx.font = 'bold 24px monospace';
+  ctx.fillText('v2', 1040, 1880);
+
+  // 8. Конвертация
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
@@ -130,10 +134,10 @@ export async function generateShareCard(historyItem) {
   });
 }
 
-// Функция отрисовки стилизованной карты тела (теперь больше и ниже)
+// Упрощенная карта без roundRect (чтобы не глючило на Android)
 function drawMuscleMap(ctx, hitMuscles) {
-  const cx = 540; // Центр по X
-  const cy = 1200; // Центр по Y (сдвинули вниз, чтобы заполнить пустоту)
+  const cx = 540;
+  const cy = 1100; 
   const accent = '#CCFF00';
   const base = '#1C1C21'; 
 
@@ -142,46 +146,43 @@ function drawMuscleMap(ctx, hitMuscles) {
   ctx.font = '600 36px Manrope, sans-serif';
   ctx.fillText('Нагруженные группы', cx, cy - 250);
 
-  // Увеличиваем масштаб карты (примерно в 1.5 раза)
-  const s = 1.5; 
+  const s = 1.6; // Масштаб
 
   // Голова
   ctx.fillStyle = base;
   ctx.beginPath(); ctx.arc(cx, cy - 160 * s, 30 * s, 0, Math.PI * 2); ctx.fill();
 
-  // Торс (Грудь / Кор)
+  // Торс
   ctx.fillStyle = hitMuscles.has('Грудь') ? accent : base;
-  ctx.beginPath(); ctx.roundRect(cx - 60 * s, cy - 90 * s, 120 * s, 40 * s, 10 * s); ctx.fill();
+  ctx.fillRect(cx - 60 * s, cy - 90 * s, 120 * s, 40 * s);
   
   ctx.fillStyle = hitMuscles.has('Кор') ? accent : base;
-  ctx.beginPath(); ctx.roundRect(cx - 45 * s, cy - 40 * s, 90 * s, 60 * s, 10 * s); ctx.fill();
+  ctx.fillRect(cx - 45 * s, cy - 40 * s, 90 * s, 60 * s);
 
   // Плечи
   ctx.fillStyle = (hitMuscles.has('Плечи (Перед/Сред)') || hitMuscles.has('Плечи (Зад)')) ? accent : base;
   ctx.beginPath(); ctx.arc(cx - 75 * s, cy - 80 * s, 18 * s, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(cx + 75 * s, cy - 80 * s, 18 * s, 0, Math.PI * 2); ctx.fill();
   
-  // Руки (Бицепс/Трицепс)
+  // Руки
   const armColor = (hitMuscles.has('Бицепс') || hitMuscles.has('Трицепс')) ? accent : base;
   ctx.fillStyle = armColor;
-  ctx.beginPath(); ctx.roundRect(cx - 90 * s, cy - 60 * s, 20 * s, 60 * s, 10 * s); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(cx + 70 * s, cy - 60 * s, 20 * s, 60 * s, 10 * s); ctx.fill();
+  ctx.fillRect(cx - 90 * s, cy - 60 * s, 20 * s, 60 * s);
+  ctx.fillRect(cx + 70 * s, cy - 60 * s, 20 * s, 60 * s);
 
-  // Ноги (Квадрицепс)
+  // Ноги
   ctx.fillStyle = hitMuscles.has('Квадрицепс') ? accent : base;
-  ctx.beginPath(); ctx.roundRect(cx - 40 * s, cy + 30 * s, 30 * s, 90 * s, 10 * s); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(cx + 10 * s, cy + 30 * s, 30 * s, 90 * s, 10 * s); ctx.fill();
+  ctx.fillRect(cx - 40 * s, cy + 30 * s, 30 * s, 90 * s);
+  ctx.fillRect(cx + 10 * s, cy + 30 * s, 30 * s, 90 * s);
 
-  // Бицепс бедра / Ягодицы
   const legColor = (hitMuscles.has('Бицепс бедра') || hitMuscles.has('Ягодицы')) ? accent : base;
   ctx.fillStyle = legColor;
-  ctx.beginPath(); ctx.roundRect(cx - 40 * s, cy + 130 * s, 30 * s, 60 * s, 10 * s); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(cx + 10 * s, cy + 130 * s, 30 * s, 60 * s, 10 * s); ctx.fill();
+  ctx.fillRect(cx - 40 * s, cy + 130 * s, 30 * s, 60 * s);
+  ctx.fillRect(cx + 10 * s, cy + 130 * s, 30 * s, 60 * s);
 
-  // Икры
   ctx.fillStyle = hitMuscles.has('Икры') ? accent : base;
-  ctx.beginPath(); ctx.roundRect(cx - 35 * s, cy + 200 * s, 20 * s, 40 * s, 10 * s); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(cx + 15 * s, cy + 200 * s, 20 * s, 40 * s, 10 * s); ctx.fill();
+  ctx.fillRect(cx - 35 * s, cy + 200 * s, 20 * s, 40 * s);
+  ctx.fillRect(cx + 15 * s, cy + 200 * s, 20 * s, 40 * s);
 }
 
 /* © Alexulyanovsk */
