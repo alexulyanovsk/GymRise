@@ -11,10 +11,6 @@ const lastAttemptCache = new Map();
 export function invalidatePlanCaches() { inDaysCache.clear(); }
 export function invalidateHistoryCaches() { lastAttemptCache.clear(); }
 
-/**
- * Возвращает схему упражнения с учётом overrides в дне (schemes).
- * Не мутирует EXERCISES.
- */
 export function getExScheme(dayId, exId) {
   const base = EXERCISES[exId];
   if (!base) return null;
@@ -105,7 +101,7 @@ export function sanitizeState() {
     if (!EXERCISES[id]) { delete state.weights[id]; continue; }
     const w = state.weights[id];
     if (!w || typeof w !== 'object') { delete state.weights[id]; continue; }
-    
+
     // Миграция старого формата {weight, reps} в новый {weight, targetReps, streak}
     if (w.targetReps === undefined && w.reps !== undefined) {
       w.targetReps = Number(w.reps) || EXERCISES[id].repMin;
@@ -115,7 +111,7 @@ export function sanitizeState() {
 
     const numW = Number(w.weight);
     if (!Number.isFinite(numW) || numW < 0) { delete state.weights[id]; continue; }
-    
+
     const numTarget = Number(w.targetReps);
     const ex = EXERCISES[id];
     state.weights[id] = {
@@ -151,6 +147,7 @@ export function sanitizeState() {
       const numR = Number(w.currentReps);
       if (!Number.isFinite(numR) || numR < 1) w.currentReps = 1; else w.currentReps = numR;
       if (typeof w.currentNote !== 'string') w.currentNote = '';
+      if (typeof w.effortAsked !== 'boolean') w.effortAsked = false;
     }
   }
 
@@ -356,39 +353,30 @@ export function getLastAttempt(exId) {
   return res;
 }
 
-/**
- * Рассчитывает стартовые значения для упражнения.
- * Учитывает профиль (пол, вес, опыт), BAR_WEIGHTS и округление.
- */
 export function startValues(dayId, exId) {
   const ex = getExScheme(dayId, exId);
   if (!ex) return { weight: 0, reps: 1 };
 
-  // 1. Если есть сохраненный прогресс — используем его
   const s = state.weights[exId];
   if (s && Number.isFinite(s.weight)) {
     return { weight: s.weight, reps: s.targetReps || ex.repMin };
   }
-  
-  // 2. Если есть история (но нет в weights) — берем последнюю
+
   const l = getLastAttempt(exId);
   if (l && l.length) {
     return { weight: l[l.length - 1].weight, reps: l[l.length - 1].reps };
   }
 
-  // 3. Новое упражнение — считаем по формуле
   let w = ex.wMin;
-  let targetReps = ex.repMin; // Всегда начинаем с нижней границы (8)
+  let targetReps = ex.repMin;
 
   if (ex.unit === 'свой вес') {
     w = 0;
-    // Эвристика для своего веса на основе массы тела
     if (state.profile.bodyWeight > 90) targetReps = ex.repMin;
     else if (state.profile.bodyWeight < 70) targetReps = ex.repMax;
     return { weight: w, reps: targetReps };
   }
 
-  // Коэффициенты профиля
   const kGender = state.profile.gender === 'female' ? 0.55 : 1.0;
   const kExp = state.profile.exp === 'beginner' ? 0.75 : state.profile.exp === 'advanced' ? 1.25 : 1.0;
   const kBw = Math.min(1.3, Math.max(0.7, state.profile.bodyWeight / 80));
@@ -396,22 +384,14 @@ export function startValues(dayId, exId) {
 
   w = ex.wMin * scaleFactor;
 
-  // Учет веса грифа/каретки
   const barWeight = BAR_WEIGHTS[exId] || 0;
   if (w < barWeight) w = barWeight;
 
-  // Округление
   let inc = ex.inc || 2.5;
-  
-  if (ex.unit === 'кг/гантель') {
-    inc = 2; // Гантели обычно шаг 2 кг
-  } else if (ex.unit === 'стек') {
-    inc = 2.5; // Тренажеры обычно 2.5
-  }
-  
-  w = Math.ceil(w / inc) * inc;
+  if (ex.unit === 'кг/гантель') inc = 2;
+  else if (ex.unit === 'стек') inc = 2.5;
 
-  // Защита от 0 и отрицательных
+  w = Math.ceil(w / inc) * inc;
   if (w <= 0) w = inc;
 
   return { weight: w, reps: targetReps };
