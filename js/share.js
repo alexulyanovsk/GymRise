@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Версия 2. Убран список, добавлена метка v2 для отладки.
+ * Описание: Исправлена карта тела, позиционирование логотипа и текста.
  */
 
 import { EXERCISES } from './data.js';
@@ -31,34 +31,34 @@ export async function generateShareCard(historyItem) {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 2. Логотип
+  // 2. Логотип (сдвинули ниже и уменьшили)
   try {
     const logo = await loadImage('./icon.svg');
-    ctx.drawImage(logo, 440, 100, 200, 200);
+    ctx.drawImage(logo, 490, 130, 100, 100); // Уменьшили размер до 100x100
   } catch (e) {
     ctx.fillStyle = '#CCFF00';
-    ctx.fillRect(440, 200, 200, 20);
-    ctx.beginPath(); ctx.arc(440, 210, 40, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(640, 210, 40, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(490, 170, 100, 10);
+    ctx.beginPath(); ctx.arc(490, 175, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(590, 175, 20, 0, Math.PI * 2); ctx.fill();
   }
 
   // 3. Заголовок
   ctx.fillStyle = '#FFFFFF';
   ctx.font = 'bold 80px Manrope, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('GymRise', 540, 380);
+  ctx.fillText('GymRise', 540, 320);
 
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 40px Manrope, sans-serif';
-  ctx.fillText(historyItem.dayTitle || 'Тренировка', 540, 450);
+  ctx.fillText(historyItem.dayTitle || 'Тренировка', 540, 390);
 
   const date = new Date(historyItem.ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 36px Manrope, sans-serif';
-  ctx.fillText(date, 540, 520);
+  ctx.fillText(date, 540, 460);
 
   // 4. Общий тоннаж
-  let startY = 680;
+  let startY = 600;
   ctx.textAlign = 'left';
   
   let totalVolume = 0;
@@ -96,13 +96,7 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 7. ОТЛАДОЧНАЯ МЕТКА (Чтобы понять, что файл обновился)
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#333333';
-  ctx.font = 'bold 24px monospace';
-  ctx.fillText('v2', 1040, 1880);
-
-  // 8. Конвертация
+  // 7. Конвертация
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
@@ -111,16 +105,9 @@ export async function generateShareCard(historyItem) {
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
-          await navigator.share({
-            files: [file],
-            title: 'Моя тренировка в GymRise',
-            text: 'Смотри мой прогресс!'
-          });
+          await navigator.share({ files: [file], title: 'Моя тренировка в GymRise' });
           resolve(true);
-        } catch (e) {
-          if (e.name !== 'AbortError') console.error('Share failed', e);
-          resolve(false);
-        }
+        } catch (e) { resolve(false); }
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -134,55 +121,53 @@ export async function generateShareCard(historyItem) {
   });
 }
 
-// Упрощенная карта без roundRect (чтобы не глючило на Android)
+// Нормальная карта тела без наложений
 function drawMuscleMap(ctx, hitMuscles) {
   const cx = 540;
-  const cy = 1100; 
+  const cy = 1200; // Центр фигуры
   const accent = '#CCFF00';
   const base = '#1C1C21'; 
 
+  // Заголовок карты (поднят выше)
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
   ctx.font = '600 36px Manrope, sans-serif';
-  ctx.fillText('Нагруженные группы', cx, cy - 250);
+  ctx.fillText('Нагруженные группы', cx, cy - 300);
 
-  const s = 1.6; // Масштаб
-
-  // Голова
+  // 1. Голова (всегда серая)
   ctx.fillStyle = base;
-  ctx.beginPath(); ctx.arc(cx, cy - 160 * s, 30 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy - 220, 35, 0, Math.PI * 2); ctx.fill();
 
-  // Торс
-  ctx.fillStyle = hitMuscles.has('Грудь') ? accent : base;
-  ctx.fillRect(cx - 60 * s, cy - 90 * s, 120 * s, 40 * s);
-  
-  ctx.fillStyle = hitMuscles.has('Кор') ? accent : base;
-  ctx.fillRect(cx - 45 * s, cy - 40 * s, 90 * s, 60 * s);
-
-  // Плечи
+  // 2. Плечи
   ctx.fillStyle = (hitMuscles.has('Плечи (Перед/Сред)') || hitMuscles.has('Плечи (Зад)')) ? accent : base;
-  ctx.beginPath(); ctx.arc(cx - 75 * s, cy - 80 * s, 18 * s, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx + 75 * s, cy - 80 * s, 18 * s, 0, Math.PI * 2); ctx.fill();
-  
-  // Руки
-  const armColor = (hitMuscles.has('Бицепс') || hitMuscles.has('Трицепс')) ? accent : base;
-  ctx.fillStyle = armColor;
-  ctx.fillRect(cx - 90 * s, cy - 60 * s, 20 * s, 60 * s);
-  ctx.fillRect(cx + 70 * s, cy - 60 * s, 20 * s, 60 * s);
+  ctx.beginPath(); ctx.arc(cx - 90, cy - 120, 30, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 90, cy - 120, 30, 0, Math.PI * 2); ctx.fill();
 
-  // Ноги
+  // 3. Грудь (Торс)
+  ctx.fillStyle = hitMuscles.has('Грудь') ? accent : base;
+  ctx.fillRect(cx - 80, cy - 140, 160, 70);
+
+  // 4. Руки (Бицепс/Трицепс)
+  ctx.fillStyle = (hitMuscles.has('Бицепс') || hitMuscles.has('Трицепс')) ? accent : base;
+  ctx.fillRect(cx - 120, cy - 80, 30, 160); // Левая
+  ctx.fillRect(cx + 90, cy - 80, 30, 160);  // Правая
+
+  // 5. Кор
+  ctx.fillStyle = hitMuscles.has('Кор') ? accent : base;
+  ctx.fillRect(cx - 60, cy - 50, 120, 120);
+
+  // 6. Ягодицы / Бицепс бедра (Верх ног)
+  ctx.fillStyle = (hitMuscles.has('Бицепс бедра') || hitMuscles.has('Ягодицы')) ? accent : base;
+  ctx.fillRect(cx - 70, cy + 90, 60, 100); // Левая
+  ctx.fillRect(cx + 10, cy + 90, 60, 100); // Правая
+
+  // 7. Квадрицепс (Низ ног)
   ctx.fillStyle = hitMuscles.has('Квадрицепс') ? accent : base;
-  ctx.fillRect(cx - 40 * s, cy + 30 * s, 30 * s, 90 * s);
-  ctx.fillRect(cx + 10 * s, cy + 30 * s, 30 * s, 90 * s);
+  ctx.fillRect(cx - 70, cy + 210, 60, 120); // Левая
+  ctx.fillRect(cx + 10, cy + 210, 60, 120); // Правая
 
-  const legColor = (hitMuscles.has('Бицепс бедра') || hitMuscles.has('Ягодицы')) ? accent : base;
-  ctx.fillStyle = legColor;
-  ctx.fillRect(cx - 40 * s, cy + 130 * s, 30 * s, 60 * s);
-  ctx.fillRect(cx + 10 * s, cy + 130 * s, 30 * s, 60 * s);
-
+  // 8. Икры
   ctx.fillStyle = hitMuscles.has('Икры') ? accent : base;
-  ctx.fillRect(cx - 35 * s, cy + 200 * s, 20 * s, 40 * s);
-  ctx.fillRect(cx + 15 * s, cy + 200 * s, 20 * s, 40 * s);
+  ctx.fillRect(cx - 60, cy + 350, 40, 80); // Левая
+  ctx.fillRect(cx + 20, cy + 350, 40, 80); // Правая
 }
-
-/* © Alexulyanovsk */
