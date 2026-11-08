@@ -1,4 +1,4 @@
-import { DEFAULT_STATE, EXERCISES, LIMITS } from './data.js';
+import { DEFAULT_STATE, EXERCISES, LIMITS, BAR_WEIGHTS } from './data.js';
 import { dbSet, dbGet } from './db.js';
 import { uiAlert } from './bridge.js';
 
@@ -52,6 +52,18 @@ function sanitizeDaySchemes(d, exIdSet) {
 }
 
 export function sanitizeState() {
+  // --- Валидация профиля ---
+  if (!state.profile || typeof state.profile !== 'object') {
+    state.profile = { gender: 'male', bodyWeight: 80, exp: 'intermediate', onboarded: false };
+  } else {
+    if (state.profile.gender !== 'male' && state.profile.gender !== 'female') state.profile.gender = 'male';
+    const bw = Number(state.profile.bodyWeight);
+    state.profile.bodyWeight = (Number.isFinite(bw) && bw >= 30 && bw <= 200) ? bw : 80;
+    if (!['beginner', 'intermediate', 'advanced'].includes(state.profile.exp)) state.profile.exp = 'intermediate';
+    state.profile.onboarded = !!state.profile.onboarded;
+  }
+
+  // --- Валидация планов ---
   if (!state.plans || typeof state.plans !== 'object' || Array.isArray(state.plans)) state.plans = {};
   for (const id of Object.keys(state.plans)) {
     const d = state.plans[id];
@@ -61,6 +73,7 @@ export function sanitizeState() {
     sanitizeDaySchemes(d, new Set(d.exercises));
   }
 
+  // --- Валидация истории ---
   if (!Array.isArray(state.history)) state.history = [];
   state.history = state.history.filter(h => h && typeof h.ts === 'number' && Array.isArray(h.exercises));
   state.history.forEach(h => {
@@ -86,20 +99,33 @@ export function sanitizeState() {
   state.history.sort((a, b) => b.ts - a.ts);
   if (state.history.length > LIMITS.historyMax) state.history.length = LIMITS.historyMax;
 
+  // --- Валидация весов и прогрессии ---
   if (!state.weights || typeof state.weights !== 'object' || Array.isArray(state.weights)) state.weights = {};
   for (const id of Object.keys(state.weights)) {
     if (!EXERCISES[id]) { delete state.weights[id]; continue; }
     const w = state.weights[id];
     if (!w || typeof w !== 'object') { delete state.weights[id]; continue; }
+    
+    // Миграция старого формата {weight, reps} в новый {weight, targetReps, streak}
+    if (w.targetReps === undefined && w.reps !== undefined) {
+      w.targetReps = Number(w.reps) || EXERCISES[id].repMin;
+      w.streak = 0;
+      delete w.reps;
+    }
+
     const numW = Number(w.weight);
-    const numR = Number(w.reps);
     if (!Number.isFinite(numW) || numW < 0) { delete state.weights[id]; continue; }
+    
+    const numTarget = Number(w.targetReps);
+    const ex = EXERCISES[id];
     state.weights[id] = {
       weight: numW,
-      reps: Number.isFinite(numR) && numR >= 1 ? numR : 1
+      targetReps: (Number.isFinite(numTarget) && numTarget >= ex.repMin && numTarget <= ex.repMax) ? numTarget : ex.repMin,
+      streak: Number.isFinite(w.streak) ? Math.min(2, Math.max(0, w.streak)) : 0
     };
   }
 
+  // --- Валидация тренировки ---
   if (state.workout) {
     const w = state.workout;
     const day = state.plans[w.dayId];
@@ -180,6 +206,7 @@ export async function loadState() {
     if (typeof source._lastSavedTs === 'number') state._lastSavedTs = source._lastSavedTs;
     if (typeof source.generatorOpen === 'boolean') state.generatorOpen = source.generatorOpen;
     if (typeof source.libFilter === 'string') state.libFilter = source.libFilter;
+    if (source.profile && typeof source.profile === 'object') state.profile = source.profile;
   }
 
   sanitizeState();
@@ -192,7 +219,6 @@ export async function loadState() {
     }
   } catch(_) {}
 
-  // Если emergency-снимок содержал rest — восстановим
   if (!state.rest && source && source.rest && typeof source.rest.endsAt === 'number' && source.rest.endsAt > Date.now()) {
     state.rest = source.rest;
   }
@@ -212,7 +238,8 @@ export async function flushNow() {
       lastCompletedTs: state.lastCompletedTs,
       _lastSavedTs: state._lastSavedTs,
       generatorOpen: state.generatorOpen,
-      libFilter: state.libFilter     // ← сохраняем фильтр библиотеки
+      libFilter: state.libFilter,
+      profile: state.profile
     }));
     await dbSet('full_state', stateToSave);
     try { localStorage.removeItem('gymplan_emergency'); } catch(_) {}
@@ -241,7 +268,7 @@ export async function exportData() {
       plans: state.plans, screen: state.screen, currentDayId: state.currentDayId,
       workout: state.workout, history: state.history, weights: state.weights,
       lastCompletedTs: state.lastCompletedTs, _lastSavedTs: Date.now(),
-      libFilter: state.libFilter
+      libFilter: state.libFilter, profile: state.profile
     };
   }
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -270,7 +297,6 @@ export async function importData(file) {
         if (data.history !== undefined && !Array.isArray(data.history)) throw new Error('Некорректное поле history');
         if (data.weights !== undefined && (typeof data.weights !== 'object' || Array.isArray(data.weights))) throw new Error('Некорректное поле weights');
 
-        // Фиксированный ключ бэкапа — не копим записи
         try {
           const current = await dbGet('full_state');
           if (current) await dbSet('full_state_backup', current);
@@ -296,6 +322,7 @@ export async function importData(file) {
         state.generatorOpen = false;
         state.libFilter = 'Все';
         state.libSearch = '';
+        state.profile = { gender: 'male', bodyWeight: 80, exp: 'intermediate', onboarded: false };
 
         await loadState();
         sanitizeState();
@@ -329,31 +356,65 @@ export function getLastAttempt(exId) {
   return res;
 }
 
-export function progressionHint(dayId, exId) {
-  const ex = getExScheme(dayId, exId); if (!ex) return null;
-  if (ex.unit === 'свой вес') return null;
-  const cutoff = Date.now() - LIMITS.progressionWindowMs;
-  const att = [];
-  for (const h of state.history) {
-    if (h.ts < cutoff) break;
-    if (!Array.isArray(h.exercises)) continue;
-    const f = h.exercises.find(x => x && x.id === exId);
-    if (f && Array.isArray(f.sets) && f.sets.length) att.push(f.sets);
-    if (att.length >= 2) break;
-  }
-  if (att.length < 2) return null;
-  return att.every(s => s.length >= ex.sets && s.every(r => r && Number.isFinite(r.reps) && r.reps >= ex.repMax))
-    ? `🎯 Пора +${ex.inc} ${ex.unit}` : null;
-}
-
+/**
+ * Рассчитывает стартовые значения для упражнения.
+ * Учитывает профиль (пол, вес, опыт), BAR_WEIGHTS и округление.
+ */
 export function startValues(dayId, exId) {
   const ex = getExScheme(dayId, exId);
   if (!ex) return { weight: 0, reps: 1 };
+
+  // 1. Если есть сохраненный прогресс — используем его
   const s = state.weights[exId];
-  if (s && Number.isFinite(s.weight)) return { weight: s.weight, reps: s.reps || ex.repMax };
+  if (s && Number.isFinite(s.weight)) {
+    return { weight: s.weight, reps: s.targetReps || ex.repMin };
+  }
+  
+  // 2. Если есть история (но нет в weights) — берем последнюю
   const l = getLastAttempt(exId);
-  if (l && l.length) return { weight: l[l.length - 1].weight, reps: l[l.length - 1].reps };
-  return { weight: ex.wMin, reps: ex.repMax };
+  if (l && l.length) {
+    return { weight: l[l.length - 1].weight, reps: l[l.length - 1].reps };
+  }
+
+  // 3. Новое упражнение — считаем по формуле
+  let w = ex.wMin;
+  let targetReps = ex.repMin; // Всегда начинаем с нижней границы (8)
+
+  if (ex.unit === 'свой вес') {
+    w = 0;
+    // Эвристика для своего веса на основе массы тела
+    if (state.profile.bodyWeight > 90) targetReps = ex.repMin;
+    else if (state.profile.bodyWeight < 70) targetReps = ex.repMax;
+    return { weight: w, reps: targetReps };
+  }
+
+  // Коэффициенты профиля
+  const kGender = state.profile.gender === 'female' ? 0.55 : 1.0;
+  const kExp = state.profile.exp === 'beginner' ? 0.75 : state.profile.exp === 'advanced' ? 1.25 : 1.0;
+  const kBw = Math.min(1.3, Math.max(0.7, state.profile.bodyWeight / 80));
+  const scaleFactor = kGender * kExp * kBw;
+
+  w = ex.wMin * scaleFactor;
+
+  // Учет веса грифа/каретки
+  const barWeight = BAR_WEIGHTS[exId] || 0;
+  if (w < barWeight) w = barWeight;
+
+  // Округление
+  let inc = ex.inc || 2.5;
+  
+  if (ex.unit === 'кг/гантель') {
+    inc = 2; // Гантели обычно шаг 2 кг
+  } else if (ex.unit === 'стек') {
+    inc = 2.5; // Тренажеры обычно 2.5
+  }
+  
+  w = Math.ceil(w / inc) * inc;
+
+  // Защита от 0 и отрицательных
+  if (w <= 0) w = inc;
+
+  return { weight: w, reps: targetReps };
 }
 
 export function getInDays(exId) {
