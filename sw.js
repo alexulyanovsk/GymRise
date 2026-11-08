@@ -1,10 +1,10 @@
 /**
  * Файл: sw.js
- * Версия: 45.0.0
- * Описание: Обновлен кэш (v45), добавлены maskable-иконка и скриншот в APP_SHELL.
+ * Версия: 49.0.0
+ * Описание: Обновлен кэш (v49), добавлены maskable-иконка и скриншот в APP_SHELL.
  */
 
-const CACHE_NAME = 'gymplan-v45';
+const CACHE_NAME = 'gymplan-v49';
 const APP_SHELL = [
   '/GymPlan/',
   '/GymPlan/index.html',
