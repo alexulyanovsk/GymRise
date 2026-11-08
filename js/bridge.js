@@ -1,7 +1,7 @@
 /**
+ * GymRise
  * Файл: js/bridge.js
- * Версия: 2.1.0
- * Описание: uiConfirm/uiAlert строятся через DOM API, без HTML-инъекций.
+ * Автор и правообладатель: © Alexulyanovsk
  */
 
 export const tg = window.WebApp || window.Telegram?.WebApp;
@@ -142,3 +142,5 @@ if (tg) {
     applyTheme();
   } catch(_) {}
 }
+
+/* © Alexulyanovsk */
