@@ -1,10 +1,10 @@
 /**
+ * GymRise
  * Файл: js/db.js
- * Версия: 1.3.0
- * Описание: dbPromise сбрасывается при ошибке, таймеры очищаются.
+ * Автор и правообладатель: © Alexulyanovsk
  */
 
-const DB_NAME = 'GymPlanDB';
+const DB_NAME = 'GymRiseDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'state';
 
@@ -115,3 +115,5 @@ export async function dbDelete(key) {
   });
   return withTimeout(p);
 }
+
+/* © Alexulyanovsk */
