@@ -38,7 +38,6 @@ body.modal-open #app { overflow: hidden; }
   padding: 0 20px; 
   position: relative; 
   z-index: 1; 
-  /* fallback для старых WebView (iOS <15.4, Android <108) */
   height: 100vh;
   height: 100dvh;
   display: flex;
@@ -123,7 +122,6 @@ h3 { font-size: 20px; font-weight: 700; margin: 0 0 16px 0; }
 .quick-start { border: 1px solid var(--accent); background: rgba(204, 255, 0, 0.08); }
 .quick-start .bento-title { color: var(--accent); }
 
-/* Карандаш: 44x44 touch-target */
 .day-edit-btn {
   position: absolute;
   top: 4px;
@@ -173,7 +171,6 @@ h3 { font-size: 20px; font-weight: 700; margin: 0 0 16px 0; }
 .set-counter { text-align: center; font-size: 11px; color: var(--text-muted); margin: 6px 0 4px 0; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
 .controls-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; background: var(--surface); padding: 4px 12px; border-radius: var(--radius-lg); border: var(--border); flex-shrink: 0; }
 
-/* 44x44 touch-target */
 .circle-btn { 
   width: 44px; height: 44px; border-radius: 50%; 
   background: var(--surface-hover); border: var(--border); color: var(--text-main); 
@@ -213,6 +210,26 @@ h3 { font-size: 20px; font-weight: 700; margin: 0 0 16px 0; }
 .modal-day-btn .add-action { font-size: 13px; color: var(--accent); font-weight: 700; }
 .modal-input { width: 100%; padding: 16px; background: var(--bg); color: var(--text-main); border: var(--border); border-radius: var(--radius-md); font-size: 16px; font-family: inherit; outline: none; margin-bottom: 16px; transition: border-color 0.2s; }
 .modal-input:focus { border-color: var(--accent); }
+
+/* --- Новые модалки прогрессии --- */
+.modal-center { align-items: center !important; padding: 20px !important; z-index: 9999 !important; }
+.modal-dialog {
+  border-radius: 24px !important;
+  max-width: 340px !important;
+  text-align: center;
+  padding: 24px 20px !important;
+  animation: scaleUp 0.2s var(--spring);
+}
+.streak-dots {
+  color: var(--accent);
+  letter-spacing: 3px;
+  font-size: 14px;
+  font-weight: 800;
+}
+.effort-actions { display: flex; flex-direction: column; gap: 8px; }
+.effort-btn { padding: 14px; font-size: 16px; }
+.weight-dialog-actions { display: flex; gap: 8px; margin-top: 16px; }
+.weight-dialog-actions .btn { flex: 1; padding: 12px; font-size: 15px; }
 
 /* --- Списки --- */
 .search-input { width: 100%; padding: 16px 20px; background: var(--surface); color: var(--text-main); border: var(--border); border-radius: var(--radius-lg); font-size: 16px; font-family: inherit; outline: none; margin-bottom: 20px; transition: border-color 0.2s; }
