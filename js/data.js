@@ -4,6 +4,41 @@ export const LIMITS = {
   searchDebounceMs: 150, progressionWindowMs: 30 * 24 * 60 * 60 * 1000
 };
 
+// Фиксированные веса грифов и кареток (кг)
+export const BAR_WEIGHTS = {
+  // Изогнутый гриф (EZ-бар) — 10 кг
+  bi_spider_curl: 10,
+  bi_reverse_curl: 10,
+  tri_skullcrusher: 10,
+
+  // Смит-машина (каретка) — 15 кг
+  smith_squat: 15,
+  smith_hip_thrust: 15,
+  smith_calf_raise: 15,
+
+  // Стандартная штанга (олимпийский гриф) — 20 кг
+  bp_smith: 20,
+  bp_incline_bb: 20,
+  bp_decline_bb: 20,
+  back_deadlift: 20,
+  back_barbell_row: 20,
+  back_rack_pull: 20,
+  sh_ohp: 20,
+  sh_upright_row: 20,
+  bi_bb_curl: 20,
+  tri_close_grip: 20,
+  tri_floor_press: 20,
+  barbell_squat: 20,
+  front_squat: 20,
+  romanian_deadlift: 20,
+  stiff_leg_deadlift: 20,
+  good_morning: 20,
+  hip_thrust: 20,
+  barbell_calf_raise: 20,
+  seated_barbell_calf: 20,
+  back_shrugs: 20
+};
+
 export const M = ['Все', 'Грудь', 'Спина', 'Плечи (Перед/Сред)', 'Плечи (Зад)', 'Бицепс', 'Трицепс', 'Кор', 'Квадрицепс', 'Бицепс бедра', 'Ягодицы', 'Икры'];
 const CDN = 'https://d3d2ynhodh9o1z.cloudfront.net/exercises/';
 
@@ -165,12 +200,16 @@ for (const k in EX) {
 }
 export const EX_ENTRIES = Object.entries(EXERCISES);
 
-// DEFAULT_PLANS удалён — мёртвый код
-
 export const DEFAULT_STATE = {
   plans: {},
   screen: 'menu', currentDayId: null, workout: null, weights: {}, history: [],
   lastCompletedTs: 0, _lastSavedTs: 0,
   libFilter: 'Все', libSearch: '', pendingAdd: null, newDayOpen: false, newDayName: '',
-  editingDayId: null, pickForDayId: null, rest: null, generatorOpen: false
+  editingDayId: null, pickForDayId: null, rest: null, generatorOpen: false,
+  profile: {
+    gender: 'male',
+    bodyWeight: 80,
+    exp: 'intermediate',
+    onboarded: false
+  }
 };
