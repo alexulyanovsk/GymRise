@@ -1,7 +1,7 @@
 /**
  * Файл: js/generator.js
- * Версия: 2.1.0
- * Описание: Схемы подходов сохраняются в самом дне, а не мутируют EXERCISES.
+ * Версия: 2.2.1
+ * Описание: Убрано уменьшение подходов для новичков. Количество подходов берется из базы.
  */
 
 import { EXERCISES, EX_ENTRIES } from './data.js';
@@ -56,11 +56,9 @@ export function generatePlan(options) {
 
   if (availableEx.length < 10) return null;
 
-  let sets = 3, repMin = 8, repMax = 12;
-  if (goal === 'strength') { sets = 4; repMin = 4; repMax = 6; }
-  if (goal === 'endurance') { sets = 3; repMin = 15; repMax = 20; }
-  if (exp === 'beginner') sets = Math.max(2, sets - 1);
-  if (exp === 'advanced') sets += 1;
+  let repMin = 8, repMax = 12;
+  if (goal === 'strength') { repMin = 4; repMax = 6; }
+  if (goal === 'endurance') { repMin = 15; repMax = 20; }
 
   const hasLegs = !excludedGroups.includes('Ноги');
   const plans = {};
@@ -89,7 +87,19 @@ export function generatePlan(options) {
 
     const trimmed = exercises.slice(0, 7);
     const schemes = {};
-    trimmed.forEach(id => { schemes[id] = { sets, repMin, repMax }; });
+    
+    trimmed.forEach(id => {
+      const baseEx = EXERCISES[id];
+      let finalSets = baseEx.sets; // Берем ровно столько подходов, сколько заложено в базе (3, 4 или 5)
+      
+      // Опыт больше НЕ уменьшает количество подходов.
+      // Для новичков вес и так снижен в state.js (коэффициент 0.75), а повторения остаются стандартными.
+      
+      if (exp === 'advanced') finalSets += 1; // Профи можно накинуть +1 подход
+
+      schemes[id] = { sets: finalSets, repMin, repMax };
+    });
+    
     return { title, exercises: trimmed, schemes };
   };
 
