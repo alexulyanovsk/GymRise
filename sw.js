@@ -1,11 +1,11 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 61.0.0
+ * Версия: 62.0.0
  * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymrise-v61';
+const CACHE_NAME = 'gymrise-v62';
 
 const APP_SHELL = [
   './',
@@ -35,7 +35,6 @@ function safePut(cache, request, response) {
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Кэшируем каждый файл отдельно — если какого-то нет, установка не сломается
       return Promise.all(
         APP_SHELL.map(url =>
           fetch(url)
