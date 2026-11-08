@@ -1,7 +1,7 @@
 /**
  * Файл: js/ui.js
- * Версия: 13.1.0
- * Описание: Убран выбор опыта со второго экрана генератора (берется из профиля).
+ * Версия: 13.1.1
+ * Описание: Исправлено удаление блока опыта со второго экрана генератора.
  */
 
 import {
@@ -136,7 +136,6 @@ export function render() {
     if (!state.profile.onboarded) {
       document.body.insertAdjacentHTML('beforeend', renderGeneratorOnboarding());
     } else {
-      generatorOptions.exp = state.profile.exp;
       document.body.insertAdjacentHTML('beforeend', renderGeneratorDialog());
     }
   }
@@ -1136,7 +1135,6 @@ function profileNext() {
   }
   state.profile.bodyWeight = bw;
   state.profile.onboarded = true;
-  generatorOptions.exp = state.profile.exp;
   saveState();
   render();
 }
