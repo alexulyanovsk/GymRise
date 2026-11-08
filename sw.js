@@ -1,30 +1,30 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 53.0.0
+ * Версия: 55.0.0
  * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymrise-v53';
+const CACHE_NAME = 'gymrise-v55';
 
 const APP_SHELL = [
-  '/GymRise/',
-  '/GymRise/index.html',
-  '/GymRise/styles.css',
-  '/GymRise/manifest.json',
-  '/GymRise/icon.svg',
-  '/GymRise/icon-maskable.svg',
-  '/GymRise/screenshot-1.png',
-  '/GymRise/js/boot.js',
-  '/GymRise/js/main.js',
-  '/GymRise/js/ui.js',
-  '/GymRise/js/state.js',
-  '/GymRise/js/data.js',
-  '/GymRise/js/db.js',
-  '/GymRise/js/bridge.js',
-  '/GymRise/js/utils.js',
-  '/GymRise/js/generator.js',
-  '/GymRise/js/share.js'
+  './',
+  './index.html',
+  './styles.css',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './screenshot-1.png',
+  './js/boot.js',
+  './js/main.js',
+  './js/ui.js',
+  './js/state.js',
+  './js/data.js',
+  './js/db.js',
+  './js/bridge.js',
+  './js/utils.js',
+  './js/generator.js',
+  './js/share.js'
 ];
 
 function safePut(cache, request, response) {
@@ -86,15 +86,15 @@ self.addEventListener('fetch', (e) => {
           return res;
         })
         .catch(async () => {
-          return (await caches.match('/GymRise/index.html')) ||
-                 (await caches.match('/GymRise/')) ||
+          return (await caches.match('./index.html')) ||
+                 (await caches.match('./')) ||
                  new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
         })
     );
     return;
   }
 
-  if (url.pathname.startsWith('/GymRise/') && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
+  if (url.pathname.includes('/GymRise/') && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
     e.respondWith(
       caches.match(e.request).then((cached) => {
         const fetchPromise = fetch(e.request).then((res) => {
