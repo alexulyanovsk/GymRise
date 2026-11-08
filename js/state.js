@@ -1,3 +1,9 @@
+/**
+ * GymRise
+ * Файл: js/state.js
+ * Автор и правообладатель: © Alexulyanovsk
+ */
+
 import { DEFAULT_STATE, EXERCISES, LIMITS, BAR_WEIGHTS } from './data.js';
 import { dbSet, dbGet } from './db.js';
 import { uiAlert } from './bridge.js';
@@ -48,7 +54,6 @@ function sanitizeDaySchemes(d, exIdSet) {
 }
 
 export function sanitizeState() {
-  // --- Валидация профиля ---
   if (!state.profile || typeof state.profile !== 'object') {
     state.profile = { gender: 'male', bodyWeight: 80, exp: 'intermediate', onboarded: false };
   } else {
@@ -59,7 +64,6 @@ export function sanitizeState() {
     state.profile.onboarded = !!state.profile.onboarded;
   }
 
-  // --- Валидация планов ---
   if (!state.plans || typeof state.plans !== 'object' || Array.isArray(state.plans)) state.plans = {};
   for (const id of Object.keys(state.plans)) {
     const d = state.plans[id];
@@ -69,7 +73,6 @@ export function sanitizeState() {
     sanitizeDaySchemes(d, new Set(d.exercises));
   }
 
-  // --- Валидация истории ---
   if (!Array.isArray(state.history)) state.history = [];
   state.history = state.history.filter(h => h && typeof h.ts === 'number' && Array.isArray(h.exercises));
   state.history.forEach(h => {
@@ -95,14 +98,12 @@ export function sanitizeState() {
   state.history.sort((a, b) => b.ts - a.ts);
   if (state.history.length > LIMITS.historyMax) state.history.length = LIMITS.historyMax;
 
-  // --- Валидация весов и прогрессии ---
   if (!state.weights || typeof state.weights !== 'object' || Array.isArray(state.weights)) state.weights = {};
   for (const id of Object.keys(state.weights)) {
     if (!EXERCISES[id]) { delete state.weights[id]; continue; }
     const w = state.weights[id];
     if (!w || typeof w !== 'object') { delete state.weights[id]; continue; }
 
-    // Миграция старого формата {weight, reps} в новый {weight, targetReps, streak}
     if (w.targetReps === undefined && w.reps !== undefined) {
       w.targetReps = Number(w.reps) || EXERCISES[id].repMin;
       w.streak = 0;
@@ -121,7 +122,6 @@ export function sanitizeState() {
     };
   }
 
-  // --- Валидация тренировки ---
   if (state.workout) {
     const w = state.workout;
     const day = state.plans[w.dayId];
@@ -177,12 +177,12 @@ export async function loadState() {
   try {
     savedState = await dbGet('full_state');
   } catch (e) {
-    console.warn('[GymPlan] DB Load error', e);
+    console.warn('[GymRise] DB Load error', e);
   }
 
   let emergencyState = null;
   try {
-    const emStr = localStorage.getItem('gymplan_emergency');
+    const emStr = localStorage.getItem('gymrise_emergency');
     if (emStr) {
       const parsed = JSON.parse(emStr);
       if (!savedState || (parsed._lastSavedTs && parsed._lastSavedTs > (savedState._lastSavedTs || 0))) {
@@ -239,7 +239,7 @@ export async function flushNow() {
       profile: state.profile
     }));
     await dbSet('full_state', stateToSave);
-    try { localStorage.removeItem('gymplan_emergency'); } catch(_) {}
+    try { localStorage.removeItem('gymrise_emergency'); } catch(_) {}
 
     if (state.rest) {
       try { localStorage.setItem('gym_rest_v5', JSON.stringify(state.rest)); } catch(_) {}
@@ -247,7 +247,7 @@ export async function flushNow() {
       try { localStorage.removeItem('gym_rest_v5'); } catch(_) {}
     }
   } catch (e) {
-    console.warn('[GymPlan] DB Save error', e);
+    console.warn('[GymRise] DB Save error', e);
   }
 }
 
@@ -272,7 +272,7 @@ export async function exportData() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `gymplan_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `gymrise_backup_${new Date().toISOString().slice(0,10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -301,7 +301,7 @@ export async function importData(file) {
 
         await dbSet('full_state', data);
 
-        try { localStorage.removeItem('gymplan_emergency'); } catch(_) {}
+        try { localStorage.removeItem('gymrise_emergency'); } catch(_) {}
         try { localStorage.removeItem('gym_rest_v5'); } catch(_) {}
 
         state.plans = {};
@@ -407,3 +407,5 @@ export function getInDays(exId) {
   inDaysCache.set(exId, res);
   return res;
 }
+
+/* © Alexulyanovsk */
