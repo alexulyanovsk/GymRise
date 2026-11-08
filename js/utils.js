@@ -1,3 +1,9 @@
+/**
+ * GymRise
+ * Файл: js/utils.js
+ * Автор и правообладатель: © Alexulyanovsk
+ */
+
 export const $ = id => document.getElementById(id);
 export const e = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const fn = v => { const n = Number(v); return !isFinite(n) ? '0' : n === Math.floor(n) ? String(n) : n.toFixed(1).replace('.', ','); };
@@ -18,3 +24,5 @@ export const fd = ts => {
     : `${p(d.getDate())}.${p(d.getMonth() + 1)}.${String(d.getFullYear()).slice(2)}`;
   return `${datePart} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+
+/* © Alexulyanovsk */
