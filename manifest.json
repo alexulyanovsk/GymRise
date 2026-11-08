@@ -1,10 +1,10 @@
 {
-  "id": "gymrise",
+  "id": "/GymRise/",
   "name": "GymRise - Умный трекер тренировок",
   "short_name": "GymRise",
   "description": "Дневник тренировок с умным генератором и прогрессией",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/GymRise/",
+  "scope": "/GymRise/",
   "display": "standalone",
   "background_color": "#09090B",
   "theme_color": "#09090B",
@@ -14,33 +14,21 @@
   "developer": "Alexulyanovsk",
   "icons": [
     {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/GymRise/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "/GymRise/icon-maskable.svg",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     }
   ],
   "screenshots": [
     {
-      "src": "screenshot-1.png",
+      "src": "/GymRise/screenshot-1.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow"
@@ -50,12 +38,12 @@
     {
       "name": "Библиотека",
       "short_name": "Библиотека",
-      "url": "./?screen=library"
+      "url": "/GymRise/?screen=library"
     },
     {
       "name": "История",
       "short_name": "История",
-      "url": "./?screen=history"
+      "url": "/GymRise/?screen=history"
     }
   ]
 }
