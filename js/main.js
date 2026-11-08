@@ -1,7 +1,7 @@
 /**
+ * GymRise
  * Файл: js/main.js
- * Версия: 2.1.0
- * Описание: initDone-флаг, race-fix loadState, emergencySave с rest, controllerchange не релоадит при активном input.
+ * Автор и правообладатель: © Alexulyanovsk
  */
 
 import { loadState, saveState, flushNow, importData, state } from './state.js';
@@ -12,7 +12,7 @@ import { LIMITS } from './data.js';
 let initDone = false;
 
 function showFatalError(err) {
-  console.error('[GymPlan Fatal]', err);
+  console.error('[GymRise Fatal]', err);
   const app = document.getElementById('app');
   if (!app) return;
   app.className = '';
@@ -43,12 +43,12 @@ function showFatalError(err) {
 
 window.addEventListener('error', e => {
   if (!initDone) showFatalError(e.error || new Error(String(e.message)));
-  else console.error('[GymPlan] Runtime error:', e.error);
+  else console.error('[GymRise] Runtime error:', e.error);
 });
 
 window.addEventListener('unhandledrejection', e => {
   if (!initDone) showFatalError(e.reason);
-  else console.error('[GymPlan] Unhandled rejection:', e.reason);
+  else console.error('[GymRise] Unhandled rejection:', e.reason);
 });
 
 document.body.addEventListener('click', ev => {
@@ -101,7 +101,7 @@ function emergencySave() {
   try {
     const ts = Date.now();
     state._lastSavedTs = ts;
-    localStorage.setItem('gymplan_emergency', JSON.stringify({
+    localStorage.setItem('gymrise_emergency', JSON.stringify({
       plans: state.plans,
       screen: state.screen,
       currentDayId: state.currentDayId,
@@ -109,7 +109,7 @@ function emergencySave() {
       history: state.history,
       weights: state.weights,
       lastCompletedTs: state.lastCompletedTs,
-      rest: state.rest,          // ← добавлено: сохраняем таймер отдыха
+      rest: state.rest,
       _lastSavedTs: ts
     }));
   } catch(_) {}
@@ -127,17 +127,17 @@ const DOUBLE_BACK_MS = 2000;
 
 function setupBackHandler() {
   try {
-    history.replaceState({ gymplan: true }, '');
-    history.pushState({ gymplan: true }, '');
-  } catch(e) { console.warn('[GymPlan] History API недоступен:', e); }
+    history.replaceState({ gymrise: true }, '');
+    history.pushState({ gymrise: true }, '');
+  } catch(e) { console.warn('[GymRise] History API недоступен:', e); }
 
   window.addEventListener('popstate', async () => {
     if (backHandling) return;
     if (handleBack()) {
-      try { history.pushState({ gymplan: true }, ''); } catch(_) {}
+      try { history.pushState({ gymrise: true }, ''); } catch(_) {}
       return;
     }
-    try { history.pushState({ gymplan: true }, ''); } catch(_) {}
+    try { history.pushState({ gymrise: true }, ''); } catch(_) {}
 
     const now = Date.now();
     if (now - lastBackPress < DOUBLE_BACK_MS) {
@@ -149,7 +149,7 @@ function setupBackHandler() {
 
     backHandling = true;
     lastBackPress = now;
-    const ok = await uiConfirm('Выйти из GymPlan?');
+    const ok = await uiConfirm('Выйти из GymRise?');
     backHandling = false;
     lastBackPress = 0;
 
@@ -178,13 +178,12 @@ function setupServiceWorkerUpdates() {
     const firstInstall = !navigator.serviceWorker.controller;
     if (firstInstall) return;
     if (state.screen === 'workout' || state.rest) {
-      console.log('[GymPlan] Обновление готово. Применится после завершения тренировки.');
+      console.log('[GymRise] Обновление готово. Применится после завершения тренировки.');
       return;
     }
-    // Не релоадить, если пользователь сейчас печатает
     const ae = document.activeElement;
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
-      console.log('[GymPlan] Обновление отложено: пользователь вводит текст');
+      console.log('[GymRise] Обновление отложено: пользователь вводит текст');
       return;
     }
     swReloading = true;
@@ -197,8 +196,6 @@ function setupServiceWorkerUpdates() {
     initBridgeEvents();
     setupBackHandler();
 
-    // Ждём loadState с внутренним таймаутом. Если он завершится позже —
-    // делаем re-render.
     let loadErr = null;
     const loadPromise = loadState();
     try {
@@ -208,16 +205,15 @@ function setupServiceWorkerUpdates() {
       ]);
     } catch(e) {
       loadErr = e;
-      console.warn('[GymPlan] loadState timeout:', e);
+      console.warn('[GymRise] loadState timeout:', e);
     }
 
     render();
 
-    // loadState завершился позже — данные уже пришли, перерисуем
     if (loadErr) {
       loadPromise
         .then(() => {
-          console.warn('[GymPlan] loadState resolved late, re-rendering');
+          console.warn('[GymRise] loadState resolved late, re-rendering');
           render();
         })
         .catch(() => {});
@@ -230,3 +226,5 @@ function setupServiceWorkerUpdates() {
     showFatalError(err);
   }
 })();
+
+/* © Alexulyanovsk */
