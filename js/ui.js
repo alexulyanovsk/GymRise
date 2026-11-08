@@ -1,8 +1,7 @@
 /**
  * Файл: js/ui.js
- * Версия: 13.0.0
- * Описание: Онбординг, персонализация стартового веса, ступенчатая прогрессия 8/10/12,
- *           опрос RIR после 12 повторений, досрочное повышение веса.
+ * Версия: 13.1.0
+ * Описание: Убран выбор опыта со второго экрана генератора (берется из профиля).
  */
 
 import {
@@ -20,7 +19,7 @@ let lastSyncKey = '';
 let prevRenderKey = '';
 let doneSetRunning = false;
 let csvExportRunning = false;
-let generatorOptions = { goal: 'hypertrophy', exp: 'intermediate', days: 4, equipment: ['barbell', 'dumbbell', 'machine'], excludedGroups: [] };
+let generatorOptions = { goal: 'hypertrophy', days: 4, equipment: ['barbell', 'dumbbell', 'machine'], excludedGroups: [] };
 
 const ICON = {
   play: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`,
@@ -137,6 +136,7 @@ export function render() {
     if (!state.profile.onboarded) {
       document.body.insertAdjacentHTML('beforeend', renderGeneratorOnboarding());
     } else {
+      generatorOptions.exp = state.profile.exp;
       document.body.insertAdjacentHTML('beforeend', renderGeneratorDialog());
     }
   }
@@ -377,7 +377,6 @@ function renderWorkout() {
   const extra = Math.max(0, w.tempSets.length - ex.sets);
   const last = getLastAttempt(exId);
   
-  // Прогрессия из state.weights
   const wState = state.weights[exId];
   const targetReps = wState?.targetReps || ex.repMin;
   const streak = wState?.streak || 0;
@@ -415,7 +414,7 @@ function renderWorkout() {
         <div>
           <div class="progress-label">Упражнение ${w.exIdx + 1} из ${day.exercises.length}</div>
           <div class="ex-title">${e(ex.name)}</div>
-          <div class="ex-meta">${ex.sets} × ${targetReps} <span style="color:var(--accent); letter-spacing:3px; font-size:14px;">${streakDots}</span> · старт: ${e(ws(ex))}</div>
+          <div class="ex-meta">${ex.sets} × ${targetReps} <span class="streak-dots">${streakDots}</span> · старт: ${e(ws(ex))}</div>
         </div>
         <button class="close-btn" data-action="cancelWorkout" aria-label="Выйти">${ICON.x}</button>
       </div>
@@ -663,15 +662,6 @@ function renderGeneratorDialog() {
       </div>
 
       <div style="margin-bottom:12px;">
-        <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Опыт</div>
-        <div class="chips">
-          <button class="chip ${generatorOptions.exp === 'beginner' ? 'active' : ''}" data-action="genSetExp" data-val="beginner">Новичок</button>
-          <button class="chip ${generatorOptions.exp === 'intermediate' ? 'active' : ''}" data-action="genSetExp" data-val="intermediate">Средний</button>
-          <button class="chip ${generatorOptions.exp === 'advanced' ? 'active' : ''}" data-action="genSetExp" data-val="advanced">Профи</button>
-        </div>
-      </div>
-
-      <div style="margin-bottom:12px;">
         <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Дней в неделю</div>
         <div class="chips">
           <button class="chip ${generatorOptions.days === 2 ? 'active' : ''}" data-action="genSetDays" data-val="2">2</button>
@@ -782,17 +772,16 @@ function updateRestUI() {
   }
 }
 
-// --- Модалка «Как прошли 12 повторений?» и досрочная прогрессия ---
 function showEffortDialog() {
   if (document.getElementById('effortDialog')) return;
   document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-backdrop" id="effortDialog" style="z-index:9999; align-items:center; padding:20px;">
-      <div class="modal" style="border-radius:24px; max-width:320px; text-align:center;">
+    <div class="modal-backdrop modal-center" id="effortDialog">
+      <div class="modal modal-dialog">
         <h3 style="margin-bottom:16px;">Как прошли 12 повторений?</h3>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <button class="btn btn-secondary" data-effort="easy">😌 Легко</button>
-          <button class="btn btn-secondary" data-effort="normal">😤 Нормально</button>
-          <button class="btn btn-secondary" data-effort="hard">🥵 Тяжело</button>
+        <div class="effort-actions">
+          <button class="btn btn-secondary effort-btn" data-effort="easy">😌 Легко</button>
+          <button class="btn btn-secondary effort-btn" data-effort="normal">😤 Нормально</button>
+          <button class="btn btn-secondary effort-btn" data-effort="hard">🥵 Тяжело</button>
         </div>
       </div>
     </div>
@@ -822,13 +811,13 @@ function handleEffortResult(effort) {
 
 function showWeightIncreaseDialog() {
   document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-backdrop" id="weightIncreaseDialog" style="z-index:9999; align-items:center; padding:20px;">
-      <div class="modal" style="border-radius:24px; max-width:340px; text-align:center;">
+    <div class="modal-backdrop modal-center" id="weightIncreaseDialog">
+      <div class="modal modal-dialog">
         <h3 style="margin-bottom:12px;">Вес стал лёгким?</h3>
         <p class="dim small" style="margin-bottom:16px;">Поднять вес сейчас? Следующие подходы пойдут с новым весом и целью 8 повторений.</p>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-secondary" data-answer="no" style="flex:1;">Нет</button>
-          <button class="btn btn-primary" data-answer="yes" style="flex:1;">Да</button>
+        <div class="weight-dialog-actions">
+          <button class="btn btn-secondary" data-answer="no">Нет</button>
+          <button class="btn btn-primary" data-answer="yes">Да</button>
         </div>
       </div>
     </div>
@@ -876,7 +865,6 @@ function increaseWeightEarly() {
   hapticNotify('success');
 }
 
-// --- Прогрессия при завершении упражнения ---
 function applyProgression(exId, ex, tempSets) {
   if (ex.unit === 'свой вес') return null;
   const wState = state.weights[exId];
@@ -969,7 +957,6 @@ async function doneSet() {
     haptic('medium');
     saveState();
 
-    // Проверка на 12 повторений и запрос RIR
     const targetReps = state.weights[exId]?.targetReps || ex.repMin;
     const wantEffortAsk = !isBW
       && !w.effortAsked
@@ -1023,7 +1010,6 @@ function skipExercise() {
   const ex = getExScheme(w.dayId, exId);
   if (ex && w.tempSets.length > 0) {
     w.results.push({ id: exId, name: ex.name, sets: w.tempSets.slice(), note: w.currentNote || '' });
-    // Не применяем прогрессию при пропуске
     const wS = state.weights[exId];
     if (wS) wS.streak = 0;
   }
@@ -1125,7 +1111,6 @@ function toggleExcludeGroup(el) {
   }
 }
 
-// --- Онбординг профиля ---
 function profileSetGender(el) {
   state.profile.gender = el.dataset.val;
   document.querySelectorAll('[data-action="profileSetGender"]').forEach(b => {
@@ -1151,6 +1136,7 @@ function profileNext() {
   }
   state.profile.bodyWeight = bw;
   state.profile.onboarded = true;
+  generatorOptions.exp = state.profile.exp;
   saveState();
   render();
 }
@@ -1171,7 +1157,7 @@ async function applyGeneratedPlan() {
 
   const newPlans = generatePlan({
     goal: generatorOptions.goal,
-    exp: generatorOptions.exp,
+    exp: state.profile.exp,
     daysPerWeek: generatorOptions.days,
     equipment: generatorOptions.equipment,
     excludedGroups: generatorOptions.excludedGroups
@@ -1187,7 +1173,6 @@ async function applyGeneratedPlan() {
   }
   Object.assign(state.plans, newPlans);
 
-  // Сброс прогрессии под новые схемы (сохраняем вес, сбрасываем targetReps и streak)
   for (const [dayId, day] of Object.entries(newPlans)) {
     for (const exId of day.exercises) {
       const ex = EXERCISES[exId];
@@ -1402,7 +1387,6 @@ export const ACTIONS = {
   closeGenerator: () => closeGenerator(),
   generatePlanAction: () => applyGeneratedPlan(),
   genSetGoal: el => { generatorOptions.goal = el.dataset.val; document.querySelectorAll('[data-action="genSetGoal"]').forEach(b => b.classList.toggle('active', b.dataset.val === el.dataset.val)); },
-  genSetExp: el => { generatorOptions.exp = el.dataset.val; document.querySelectorAll('[data-action="genSetExp"]').forEach(b => b.classList.toggle('active', b.dataset.val === el.dataset.val)); },
   genSetDays: el => { generatorOptions.days = Number(el.dataset.val); document.querySelectorAll('[data-action="genSetDays"]').forEach(b => b.classList.toggle('active', b.dataset.val === el.dataset.val)); },
   genToggleEq: el => toggleEq(el),
   genToggleExclude: el => toggleExcludeGroup(el),
