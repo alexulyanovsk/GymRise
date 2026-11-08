@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Исправлена карта тела, позиционирование логотипа и текста.
+ * Описание: Увеличен логотип, градиент перенесен вправо-вниз, тоннаж по центру, стилизованная схема тела.
  */
 
 import { EXERCISES } from './data.js';
@@ -21,45 +21,46 @@ export async function generateShareCard(historyItem) {
   canvas.height = 1920;
   const ctx = canvas.getContext('2d');
 
-  // 1. Фон
+  // 1. Темный фон
   ctx.fillStyle = '#09090B';
   ctx.fillRect(0, 0, 1080, 1920);
 
-  const gradient = ctx.createRadialGradient(1080, 0, 0, 1080, 0, 800);
-  gradient.addColorStop(0, 'rgba(204, 255, 0, 0.15)');
+  // 2. Мягкая подсветка перенесена в ПРАВЫЙ НИЖНИЙ угол
+  const gradient = ctx.createRadialGradient(1080, 1920, 0, 1080, 1920, 900);
+  gradient.addColorStop(0, 'rgba(204, 255, 0, 0.12)');
   gradient.addColorStop(1, 'rgba(9, 9, 11, 0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 2. Логотип (сдвинули ниже и уменьшили)
+  // 3. Увеличенный логотип (160x160) по центру
   try {
     const logo = await loadImage('./icon.svg');
-    ctx.drawImage(logo, 490, 130, 100, 100); // Уменьшили размер до 100x100
+    ctx.drawImage(logo, 460, 160, 160, 160);
   } catch (e) {
     ctx.fillStyle = '#CCFF00';
-    ctx.fillRect(490, 170, 100, 10);
-    ctx.beginPath(); ctx.arc(490, 175, 20, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(590, 175, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(460, 230, 160, 15);
+    ctx.beginPath(); ctx.arc(460, 238, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(620, 238, 30, 0, Math.PI * 2); ctx.fill();
   }
 
-  // 3. Заголовок
+  // 4. Заголовок и подзаголовки
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 80px Manrope, sans-serif';
+  ctx.font = 'bold 84px Manrope, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('GymRise', 540, 320);
+  ctx.fillText('GymRise', 540, 410);
 
   ctx.fillStyle = '#8E8E93';
-  ctx.font = '500 40px Manrope, sans-serif';
-  ctx.fillText(historyItem.dayTitle || 'Тренировка', 540, 390);
+  ctx.font = '500 42px Manrope, sans-serif';
+  ctx.fillText(historyItem.dayTitle || 'Тренировка', 540, 480);
 
   const date = new Date(historyItem.ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 36px Manrope, sans-serif';
-  ctx.fillText(date, 540, 460);
+  ctx.fillText(date, 540, 545);
 
-  // 4. Общий тоннаж
-  let startY = 600;
-  ctx.textAlign = 'left';
+  // 5. Общий тоннаж — строго по центру
+  let startY = 680;
+  ctx.textAlign = 'center';
   
   let totalVolume = 0;
   historyItem.exercises.forEach(exData => {
@@ -70,23 +71,24 @@ export async function generateShareCard(historyItem) {
     });
   });
 
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 60px Manrope, sans-serif';
-  ctx.fillText('Общий тоннаж', 100, startY);
+  ctx.fillStyle = '#8E8E93';
+  ctx.font = 'bold 44px Manrope, sans-serif';
+  ctx.fillText('ОБЩИЙ ТОННАЖ', 540, startY);
+  
   ctx.fillStyle = '#CCFF00';
-  ctx.font = 'bold 120px Manrope, sans-serif';
-  ctx.fillText(`${Math.round(totalVolume)} кг`, 100, startY + 110);
+  ctx.font = 'bold 130px Manrope, sans-serif';
+  ctx.fillText(`${Math.round(totalVolume)} кг`, 540, startY + 120);
 
-  // 5. Карта нагруженных мышц
+  // 6. Стилизованная схема тела вместо "робота"
   const hitMuscles = new Set();
   historyItem.exercises.forEach(ex => {
     const base = EXERCISES[ex.id];
     if (base) hitMuscles.add(base.muscle);
   });
 
-  drawMuscleMap(ctx, hitMuscles);
+  drawElegantBodyMap(ctx, hitMuscles);
 
-  // 6. Футер
+  // 7. Футер
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 32px Manrope, sans-serif';
@@ -96,7 +98,7 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 7. Конвертация
+  // 8. Конвертация и вызов системного шаринга
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
@@ -105,9 +107,16 @@ export async function generateShareCard(historyItem) {
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title: 'Моя тренировка в GymRise' });
+          await navigator.share({
+            files: [file],
+            title: 'Моя тренировка в GymRise',
+            text: 'Смотри мой прогресс!'
+          });
           resolve(true);
-        } catch (e) { resolve(false); }
+        } catch (e) {
+          if (e.name !== 'AbortError') console.error('Share failed', e);
+          resolve(false);
+        }
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -121,53 +130,54 @@ export async function generateShareCard(historyItem) {
   });
 }
 
-// Нормальная карта тела без наложений
-function drawMuscleMap(ctx, hitMuscles) {
+// Отрисовка аккуратного минималистичного силуэта с мягкими формами
+function drawElegantBodyMap(ctx, hitMuscles) {
   const cx = 540;
-  const cy = 1200; // Центр фигуры
+  const cy = 1290;
   const accent = '#CCFF00';
-  const base = '#1C1C21'; 
+  const base = '#1C1C21';
 
-  // Заголовок карты (поднят выше)
+  // Заголовок схемы
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
-  ctx.font = '600 36px Manrope, sans-serif';
-  ctx.fillText('Нагруженные группы', cx, cy - 300);
+  ctx.font = '600 32px Manrope, sans-serif';
+  ctx.fillText('Нагруженные мышцы', cx, cy - 280);
 
-  // 1. Голова (всегда серая)
+  // Голова
   ctx.fillStyle = base;
-  ctx.beginPath(); ctx.arc(cx, cy - 220, 35, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy - 210, 32, 0, Math.PI * 2);
+  ctx.fill();
 
-  // 2. Плечи
+  // Плечи (округлые капсулы)
   ctx.fillStyle = (hitMuscles.has('Плечи (Перед/Сред)') || hitMuscles.has('Плечи (Зад)')) ? accent : base;
-  ctx.beginPath(); ctx.arc(cx - 90, cy - 120, 30, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx + 90, cy - 120, 30, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(cx - 105, cy - 135, 45, 75, 20); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(cx + 60, cy - 135, 45, 75, 20); ctx.fill();
 
-  // 3. Грудь (Торс)
+  // Грудь / Верхняя часть торса
   ctx.fillStyle = hitMuscles.has('Грудь') ? accent : base;
-  ctx.fillRect(cx - 80, cy - 140, 160, 70);
+  ctx.beginPath(); ctx.roundRect(cx - 70, cy - 140, 140, 85, 18); ctx.fill();
 
-  // 4. Руки (Бицепс/Трицепс)
+  // Руки (предплечья/бицепс)
   ctx.fillStyle = (hitMuscles.has('Бицепс') || hitMuscles.has('Трицепс')) ? accent : base;
-  ctx.fillRect(cx - 120, cy - 80, 30, 160); // Левая
-  ctx.fillRect(cx + 90, cy - 80, 30, 160);  // Правая
+  ctx.beginPath(); ctx.roundRect(cx - 115, cy - 50, 38, 145, 15); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(cx + 77, cy - 50, 38, 145, 15); ctx.fill();
 
-  // 5. Кор
+  // Кор
   ctx.fillStyle = hitMuscles.has('Кор') ? accent : base;
-  ctx.fillRect(cx - 60, cy - 50, 120, 120);
+  ctx.beginPath(); ctx.roundRect(cx - 55, cy - 45, 110, 115, 15); ctx.fill();
 
-  // 6. Ягодицы / Бицепс бедра (Верх ног)
+  // Ягодицы / Бицепс бедра
   ctx.fillStyle = (hitMuscles.has('Бицепс бедра') || hitMuscles.has('Ягодицы')) ? accent : base;
-  ctx.fillRect(cx - 70, cy + 90, 60, 100); // Левая
-  ctx.fillRect(cx + 10, cy + 90, 60, 100); // Правая
+  ctx.beginPath(); ctx.roundRect(cx - 65, cy + 80, 130, 110, 18); ctx.fill();
 
-  // 7. Квадрицепс (Низ ног)
+  // Квадрицепс
   ctx.fillStyle = hitMuscles.has('Квадрицепс') ? accent : base;
-  ctx.fillRect(cx - 70, cy + 210, 60, 120); // Левая
-  ctx.fillRect(cx + 10, cy + 210, 60, 120); // Правая
+  ctx.beginPath(); ctx.roundRect(cx - 65, cy + 200, 58, 140, 16); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(cx + 7, cy + 200, 58, 140, 16); ctx.fill();
 
-  // 8. Икры
+  // Икры
   ctx.fillStyle = hitMuscles.has('Икры') ? accent : base;
-  ctx.fillRect(cx - 60, cy + 350, 40, 80); // Левая
-  ctx.fillRect(cx + 20, cy + 350, 40, 80); // Правая
+  ctx.beginPath(); ctx.roundRect(cx - 60, cy + 350, 45, 85, 14); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(cx + 15, cy + 350, 45, 85, 14); ctx.fill();
 }
