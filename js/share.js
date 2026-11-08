@@ -2,7 +2,8 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Генерация вирусной карточки тренировки на Canvas.
+ * Описание: Исправлен подсчет тоннажа (только для топ-3), группировка подходов, 
+ *           единицы измерения и логотип с дырками.
  */
 
 import { EXERCISES } from './data.js';
@@ -18,18 +19,27 @@ export async function generateShareCard(historyItem) {
   ctx.fillStyle = '#09090B';
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // Легкий градиент в углу (акцентный цвет)
+  // Легкий градиент в углу
   const gradient = ctx.createRadialGradient(1080, 0, 0, 1080, 0, 800);
   gradient.addColorStop(0, 'rgba(204, 255, 0, 0.15)');
   gradient.addColorStop(1, 'rgba(9, 9, 11, 0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 2. Логотип (рисуем штангу текстом или фигурами для простоты)
+  // 2. Логотип с прозрачными дырками
   ctx.fillStyle = '#CCFF00';
-  ctx.fillRect(440, 200, 200, 20); // Гриф
-  ctx.beginPath(); ctx.arc(440, 210, 40, 0, Math.PI * 2); ctx.fill(); // Блин левый
-  ctx.beginPath(); ctx.arc(640, 210, 40, 0, Math.PI * 2); ctx.fill(); // Блин правый
+  // Гриф
+  ctx.fillRect(440, 200, 200, 20);
+  // Блины
+  ctx.beginPath(); ctx.arc(440, 210, 40, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(640, 210, 40, 0, Math.PI * 2); ctx.fill();
+  
+  // Вырезаем дырки (destination-out)
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath(); ctx.arc(440, 210, 14, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(640, 210, 14, 0, Math.PI * 2); ctx.fill();
+  // Возвращаем режим рисования
+  ctx.globalCompositeOperation = 'source-over';
 
   // 3. Заголовок
   ctx.fillStyle = '#FFFFFF';
@@ -47,14 +57,24 @@ export async function generateShareCard(historyItem) {
   ctx.font = '500 36px Manrope, sans-serif';
   ctx.fillText(date, 540, 520);
 
-  // 5. Статистика (Топ упражнений)
-  let startY = 680;
+  // 5. Статистика
+  let startY = 700;
   ctx.textAlign = 'left';
   
-  // Считаем общий тоннаж
+  // Берем только первые 3 упражнения
+  const displayExs = historyItem.exercises.slice(0, 3);
+  
+  // Считаем тоннаж для этих 3
   let totalVolume = 0;
-  historyItem.exercises.forEach(ex => {
-    ex.sets.forEach(s => { totalVolume += s.weight * s.reps; });
+  displayExs.forEach(exData => {
+    const ex = EXERCISES[exData.id];
+    // Проверяем, гантельное ли это упражнение
+    const isDumbbell = ex?.unit.includes('гантель') || exData.id === 'back_db_row';
+    
+    exData.sets.forEach(s => { 
+      const actualWeight = s.weight * (isDumbbell ? 2 : 1);
+      totalVolume += actualWeight * s.reps; 
+    });
   });
 
   // Вывод тоннажа
@@ -65,23 +85,38 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 100px Manrope, sans-serif';
   ctx.fillText(`${Math.round(totalVolume)} кг`, 100, startY + 100);
   
-  startY += 260;
+  startY += 320; // Чуть больше отступа
 
   // Список упражнений
-  historyItem.exercises.slice(0, 3).forEach(exData => {
+  displayExs.forEach(exData => {
     const ex = EXERCISES[exData.id];
     if (!ex) return;
 
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = '600 44px Manrope, sans-serif';
+    ctx.font = '600 48px Manrope, sans-serif';
     ctx.fillText(ex.name, 100, startY);
 
-    const setsText = exData.sets.map(s => `${fn(s.weight)}×${s.reps}`).join(', ');
+    // Группируем подходы
+    const groups = {};
+    exData.sets.forEach(s => {
+      const key = `${s.weight}_${s.reps}`;
+      groups[key] = (groups[key] || 0) + 1;
+    });
+    
+    // Формируем текст: 3 × 8 (37,5 кг)
+    const unitText = ex.unit.includes('гантель') ? 'кг/гантель' : 'кг';
+    const setsText = Object.entries(groups)
+      .map(([key, count]) => {
+        const [w, r] = key.split('_');
+        return `${count} × ${r} (${fn(w)} ${unitText})`;
+      })
+      .join('; ');
+
     ctx.fillStyle = '#8E8E93';
-    ctx.font = '500 36px Manrope, sans-serif';
+    ctx.font = '500 38px Manrope, sans-serif';
     ctx.fillText(setsText, 100, startY + 60);
 
-    startY += 150;
+    startY += 180; // Увеличили отступ между упражнениями
   });
 
   // 6. Футер
@@ -94,7 +129,7 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 7. Конвертация в файл и шеринг
+  // 7. Конвертация и шеринг
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
@@ -114,7 +149,6 @@ export async function generateShareCard(historyItem) {
           resolve(false);
         }
       } else {
-        // Фоллбек: скачивание
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
