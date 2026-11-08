@@ -1,11 +1,15 @@
-// Аварийный сброс, если main.js не загрузился за 10 секунд
+/**
+ * GymRise
+ * Файл: js/boot.js
+ * Автор и правообладатель: © Alexulyanovsk
+ */
+
 window.addEventListener('load', () => {
   setTimeout(() => {
     if (!window.__GYMPLAN_LOADED) {
-      console.warn('[GymPlan] Не загрузилось за 10с.');
+      console.warn('[GymRise] Не загрузилось за 10с.');
       const app = document.getElementById('app');
       
-      // Если сети нет, перезагрузка и сброс кэша только навредят
       if (!navigator.onLine) {
         if (app) app.innerHTML = '<div class="empty" style="color:#FF6B6B;">Нет соединения. Проверьте интернет.</div>';
         return;
@@ -26,3 +30,5 @@ window.addEventListener('load', () => {
     }
   }, 10000);
 });
+
+/* © Alexulyanovsk */
