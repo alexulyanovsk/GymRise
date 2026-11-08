@@ -1,27 +1,30 @@
 /**
+ * GymRise
  * Файл: sw.js
- * Версия: 51.0.0
- * Описание: Обновлен кэш (v51), добавлены maskable-иконка и скриншот в APP_SHELL.
+ * Версия: 52.0.0
+ * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymplan-v51';
+const CACHE_NAME = 'gymrise-v52';
+
 const APP_SHELL = [
-  '/GymPlan/',
-  '/GymPlan/index.html',
-  '/GymPlan/styles.css',
-  '/GymPlan/manifest.json',
-  '/GymPlan/icon.svg',
-  '/GymPlan/icon-maskable.svg',
-  '/GymPlan/screenshot-1.png',
-  '/GymPlan/js/boot.js',
-  '/GymPlan/js/main.js',
-  '/GymPlan/js/ui.js',
-  '/GymPlan/js/state.js',
-  '/GymPlan/js/data.js',
-  '/GymPlan/js/db.js',
-  '/GymPlan/js/bridge.js',
-  '/GymPlan/js/utils.js',
-  '/GymPlan/js/generator.js'
+  '/GymRise/',
+  '/GymRise/index.html',
+  '/GymRise/styles.css',
+  '/GymRise/manifest.json',
+  '/GymRise/icon.svg',
+  '/GymRise/icon-maskable.svg',
+  '/GymRise/screenshot-1.png',
+  '/GymRise/js/boot.js',
+  '/GymRise/js/main.js',
+  '/GymRise/js/ui.js',
+  '/GymRise/js/state.js',
+  '/GymRise/js/data.js',
+  '/GymRise/js/db.js',
+  '/GymRise/js/bridge.js',
+  '/GymRise/js/utils.js',
+  '/GymRise/js/generator.js',
+  '/GymRise/js/share.js'
 ];
 
 function safePut(cache, request, response) {
@@ -30,7 +33,6 @@ function safePut(cache, request, response) {
 }
 
 self.addEventListener('install', (e) => {
-  // Атомарный install: при фейле любого файла SW не активируется.
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
@@ -48,7 +50,6 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // 1. Шрифты Google — Cache First
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     e.respondWith(
       caches.match(e.request).then((cached) => {
@@ -62,7 +63,6 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 2. Картинки с CDN — Cache First
   if (url.hostname === 'd3d2ynhodh9o1z.cloudfront.net') {
     e.respondWith(
       caches.match(e.request).then((cached) => {
@@ -76,7 +76,6 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 3. Навигация (HTML) — Network First, корректный fallback
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request)
@@ -87,16 +86,15 @@ self.addEventListener('fetch', (e) => {
           return res;
         })
         .catch(async () => {
-          return (await caches.match('/GymPlan/index.html')) ||
-                 (await caches.match('/GymPlan/')) ||
+          return (await caches.match('/GymRise/index.html')) ||
+                 (await caches.match('/GymRise/')) ||
                  new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
         })
     );
     return;
   }
 
-  // 4. Локальная статика (JS, CSS) — Stale-While-Revalidate
-  if (url.pathname.startsWith('/GymPlan/') && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
+  if (url.pathname.startsWith('/GymRise/') && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
     e.respondWith(
       caches.match(e.request).then((cached) => {
         const fetchPromise = fetch(e.request).then((res) => {
@@ -111,8 +109,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 5. Остальное — из кэша или сети
   e.respondWith(
     caches.match(e.request).then((cached) => cached || fetch(e.request).catch(() => Response.error()))
   );
 });
+
+/* © Alexulyanovsk */
