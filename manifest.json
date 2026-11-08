@@ -1,33 +1,46 @@
 {
-  "id": "/GymPlan/",
-  "name": "GymPlan - Трекер тренировок",
-  "short_name": "GymPlan",
-  "description": "Дневник тренировок с офлайн-режимом",
-  "start_url": "/GymPlan/",
-  "scope": "/GymPlan/",
+  "id": "/GymRise/",
+  "name": "GymRise - Умный трекер тренировок",
+  "short_name": "GymRise",
+  "description": "Дневник тренировок с умным генератором и прогрессией",
+  "start_url": "/GymRise/",
+  "scope": "/GymRise/",
   "display": "standalone",
   "background_color": "#09090B",
   "theme_color": "#09090B",
   "orientation": "portrait",
   "lang": "ru",
   "categories": ["health", "fitness", "sports"],
+  "developer": "Alexulyanovsk",
   "icons": [
     {
-      "src": "/GymPlan/icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/GymRise/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/GymPlan/icon-maskable.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/GymRise/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/GymRise/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/GymRise/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
   "screenshots": [
     {
-      "src": "/GymPlan/screenshot-1.png",
+      "src": "/GymRise/screenshot-1.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow"
@@ -37,12 +50,12 @@
     {
       "name": "Библиотека",
       "short_name": "Библиотека",
-      "url": "/GymPlan/?screen=library"
+      "url": "/GymRise/?screen=library"
     },
     {
       "name": "История",
       "short_name": "История",
-      "url": "/GymPlan/?screen=history"
+      "url": "/GymRise/?screen=history"
     }
   ]
 }
