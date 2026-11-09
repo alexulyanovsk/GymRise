@@ -1,7 +1,7 @@
 /**
  * Файл: js/generator.js
- * Версия: 2.2.1
- * Описание: Убрано уменьшение подходов для новичков. Количество подходов берется из базы.
+ * Версия: 2.3.0
+ * Описание: Добавлено время отдыха в зависимости от цели.
  */
 
 import { EXERCISES, EX_ENTRIES } from './data.js';
@@ -60,6 +60,11 @@ export function generatePlan(options) {
   if (goal === 'strength') { repMin = 4; repMax = 6; }
   if (goal === 'endurance') { repMin = 15; repMax = 20; }
 
+  // Определяем время отдыха под цель
+  let restSec = 90; // По умолчанию для массы
+  if (goal === 'strength') restSec = 180; // 3 минуты для силы
+  if (goal === 'endurance') restSec = 60; // 1 минута для выносливости
+
   const hasLegs = !excludedGroups.includes('Ноги');
   const plans = {};
 
@@ -90,14 +95,10 @@ export function generatePlan(options) {
     
     trimmed.forEach(id => {
       const baseEx = EXERCISES[id];
-      let finalSets = baseEx.sets; // Берем ровно столько подходов, сколько заложено в базе (3, 4 или 5)
-      
-      // Опыт больше НЕ уменьшает количество подходов.
-      // Для новичков вес и так снижен в state.js (коэффициент 0.75), а повторения остаются стандартными.
-      
-      if (exp === 'advanced') finalSets += 1; // Профи можно накинуть +1 подход
+      let finalSets = baseEx.sets; 
+      if (exp === 'advanced') finalSets += 1; 
 
-      schemes[id] = { sets: finalSets, repMin, repMax };
+      schemes[id] = { sets: finalSets, repMin, repMax, restSec };
     });
     
     return { title, exercises: trimmed, schemes };
