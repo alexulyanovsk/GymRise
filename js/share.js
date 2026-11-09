@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Обход кэша SW, использование data:image/svg+xml для 100% работы в WebView.
+ * Описание: Финальная версия через data:image/svg+xml + encodeURIComponent.
  */
 
 import { EXERCISES } from './data.js';
@@ -23,52 +23,69 @@ const MUSCLE_MAP = {
 
 async function loadAndColorSvg(svgPath, hitMuscles) {
   try {
-    // 1. Жестко обходим кэш Service Worker
-    const response = await fetch(svgPath, { cache: 'no-store' });
-    if (!response.ok) return null; 
+    const response = await fetch(svgPath);
+    if (!response.ok) throw new Error('Fetch failed: ' + response.status);
     
     const svgText = await response.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    
+    // 1. Удаляем старые стили, чтобы ничего не конфликтовало
+    doc.querySelectorAll('style').forEach(el => el.remove());
+    
+    // 2. Жестко задаем размеры (чтобы Android не сделал картинку 0x0)
     const svgEl = doc.documentElement;
-
-    // 2. Задаем жесткие размеры, чтобы Android не схлопнул картинку в 0x0
     svgEl.setAttribute('width', '277');
     svgEl.setAttribute('height', '495');
 
-    // 3. Инжектим свои стили ПОВЕРХ существующих (не удаляя ничего)
-    let customCss = `
-      .body-part { fill: #1C1C21 !important; }
-      .muscle { fill: #1C1C21 !important; }
-    `;
+    // 3. Красим базу в темный
+    doc.querySelectorAll('.body-part').forEach(el => {
+      el.setAttribute('fill', '#1C1C21');
+      el.removeAttribute('class');
+      el.removeAttribute('style');
+    });
 
-    hitMuscles.forEach(group => {
-      const ids = MUSCLE_MAP[group] || [];
-      ids.forEach(id => {
-        customCss += `#${id} { fill: #CCFF00 !important; }\n`;
+    // 4. Красим все мышцы в темный
+    doc.querySelectorAll('.muscle').forEach(el => {
+      el.setAttribute('fill', '#1C1C21');
+      el.removeAttribute('class');
+      el.removeAttribute('style');
+      el.querySelectorAll('*').forEach(child => {
+        child.setAttribute('fill', '#1C1C21');
+        child.removeAttribute('style');
       });
     });
 
-    const styleEl = doc.createElement('style');
-    styleEl.textContent = customCss;
-    svgEl.insertBefore(styleEl, svgEl.firstChild);
+    // 5. Красим нагруженные в лайм
+    hitMuscles.forEach(group => {
+      const ids = MUSCLE_MAP[group] || [];
+      ids.forEach(id => {
+        const el = doc.getElementById(id);
+        if (el) {
+          el.setAttribute('fill', '#CCFF00');
+          el.querySelectorAll('*').forEach(child => {
+            child.setAttribute('fill', '#CCFF00');
+          });
+        }
+      });
+    });
 
-    // 4. Сериализуем и делаем Data URI (вместо Blob)
+    // 6. Конвертируем в безопасный Data URI (вместо Blob и Base64)
     const serializer = new XMLSerializer();
     const coloredSvgStr = serializer.serializeToString(doc);
-    
-    // Кодируем строку, чтобы не было проблем с кириллицей и символами
-    const encodedSvg = encodeURIComponent(coloredSvgStr).replace(/'/g, '%27').replace(/"/g, '%22');
-    const url = `data:image/svg+xml;charset=utf-8,${encodedSvg}`;
+    const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(coloredSvgStr)}`;
 
     return await new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
+      img.onerror = () => {
+        console.error('Image load error', svgPath);
+        resolve(null);
+      };
       img.src = url;
     });
   } catch (e) {
-    console.error('Ошибка загрузки SVG:', svgPath, e);
+    console.error('SVG error', svgPath, e);
     return null;
   }
 }
@@ -150,10 +167,13 @@ export async function generateShareCard(historyItem) {
   const imgW = 280;
   const imgH = 500;
 
-  // Просто рисуем, если загрузились
   if (frontImg && backImg) {
     ctx.drawImage(frontImg, 230, imgY, imgW, imgH);
     ctx.drawImage(backImg, 570, imgY, imgW, imgH);
+  } else {
+    ctx.fillStyle = '#FF453A';
+    ctx.font = 'bold 30px Manrope, sans-serif';
+    ctx.fillText('Ошибка загрузки карты', 540, imgY + 200);
   }
 
   ctx.fillStyle = '#8E8E93';
