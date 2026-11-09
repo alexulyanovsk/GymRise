@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Версия с Blob URL и визуальной отладкой ошибок.
+ * Описание: ВОЗВРАТ К РАБОЧЕЙ ВЕРСИИ (fetch + DOMParser + Blob URL), которая успешно рисовала мышцы.
  */
 
 import { EXERCISES } from './data.js';
@@ -55,7 +55,6 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
         if (el) {
           el.setAttribute('fill', '#CCFF00');
           el.removeAttribute('style');
-          // На всякий случай красим всех детей
           el.querySelectorAll('*').forEach(child => {
              child.setAttribute('fill', '#CCFF00');
              child.removeAttribute('style');
@@ -64,7 +63,7 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
       });
     });
 
-    // Конвертируем в Blob URL (самый совместимый метод)
+    // Конвертируем в Blob URL
     const serializer = new XMLSerializer();
     const coloredSvgStr = serializer.serializeToString(doc);
     const blob = new Blob([coloredSvgStr], {type: 'image/svg+xml;charset=utf-8'});
@@ -156,7 +155,6 @@ export async function generateShareCard(historyItem) {
     loadAndColorSvg('./assets/body-back.svg', hitMuscles)
   ]);
 
-  // Всегда пишем заголовок, чтобы видеть, что код дошел до сюда
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
   ctx.font = '600 32px Manrope, sans-serif';
@@ -166,14 +164,10 @@ export async function generateShareCard(historyItem) {
   const imgW = 280;
   const imgH = 500;
 
+  // Просто рисуем, если загрузились. Без красных ошибок.
   if (frontImg && backImg) {
     ctx.drawImage(frontImg, 230, imgY, imgW, imgH);
     ctx.drawImage(backImg, 570, imgY, imgW, imgH);
-  } else {
-    // Если картинки не загрузились - рисуем красную заглушку для отладки
-    ctx.fillStyle = '#FF453A';
-    ctx.font = 'bold 30px Manrope, sans-serif';
-    ctx.fillText('Ошибка загрузки карты', 540, imgY + 200);
   }
 
   ctx.fillStyle = '#8E8E93';
