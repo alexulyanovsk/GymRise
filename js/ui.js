@@ -1,9 +1,9 @@
 /**
  * GymRise
  * Файл: js/ui.js
- * Версия: 16.0.0
+ * Версия: 19.0.0
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Новая логика прогрессии (два шага по +2 повторения, затем вес).
+ * Описание: Бесшумная прогрессия до максимума. Опрос только перед поднятием веса.
  */
 
 import {
@@ -778,144 +778,72 @@ function updateRestUI() {
   }
 }
 
-function showEffortDialog() {
-  if (document.getElementById('effortDialog')) return;
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-backdrop modal-center" id="effortDialog">
-      <div class="modal modal-dialog">
-        <h3 style="margin-bottom:16px;">Как прошли 12 повторений?</h3>
-        <div class="effort-actions">
-          <button class="btn btn-secondary effort-btn" data-effort="easy">😌 Легко</button>
-          <button class="btn btn-secondary effort-btn" data-effort="normal">😤 Нормально</button>
-          <button class="btn btn-secondary effort-btn" data-effort="hard">🥵 Тяжело</button>
-        </div>
-      </div>
-    </div>
-  `);
-  document.getElementById('effortDialog').addEventListener('click', ev => {
-    const btn = ev.target.closest('[data-effort]');
-    if (!btn) return;
-    handleEffortResult(btn.dataset.effort);
-  });
-}
-
-function handleEffortResult(effort) {
-  const d = document.getElementById('effortDialog');
-  if (d) d.remove();
-  const w = state.workout;
-  if (!w) return;
-  w.effortAsked = true;
-
-  if (effort === 'easy') {
-    showWeightIncreaseDialog();
-  } else {
-    startRest(LIMITS.restSec);
-    refreshWorkoutUI();
-    saveState();
-  }
-}
-
-function showWeightIncreaseDialog() {
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-backdrop modal-center" id="weightIncreaseDialog">
-      <div class="modal modal-dialog">
-        <h3 style="margin-bottom:12px;">Вес стал лёгким?</h3>
-        <p class="dim small" style="margin-bottom:16px;">Поднять вес сейчас? Следующие подходы пойдут с новым весом и целью 8 повторений.</p>
-        <div class="weight-dialog-actions">
-          <button class="btn btn-secondary" data-answer="no">Нет</button>
-          <button class="btn btn-primary" data-answer="yes">Да</button>
-        </div>
-      </div>
-    </div>
-  `);
-  document.getElementById('weightIncreaseDialog').addEventListener('click', ev => {
-    const btn = ev.target.closest('[data-answer]');
-    if (!btn) return;
-    if (btn.dataset.answer === 'yes') {
-      increaseWeightEarly();
-    } else {
-      document.getElementById('weightIncreaseDialog')?.remove();
-      startRest(LIMITS.restSec);
-      refreshWorkoutUI();
-      saveState();
-    }
-  });
-}
-
-function increaseWeightEarly() {
-  document.getElementById('weightIncreaseDialog')?.remove();
-  const w = state.workout;
-  if (!w) return;
-  const day = state.plans[w.dayId];
-  if (!day) return;
-  const exId = day.exercises[w.exIdx];
-  const ex = getExScheme(w.dayId, exId);
-  if (!ex) return;
-
-  const inc = ex.inc || 2.5;
-  const newWeight = w.currentWeight + inc;
-
-  if (!state.weights[exId]) {
-    state.weights[exId] = { weight: newWeight, targetReps: ex.repMin, streak: 0 };
-  } else {
-    state.weights[exId].weight = newWeight;
-    state.weights[exId].targetReps = ex.repMin;
-    state.weights[exId].streak = 0;
-  }
-  w.currentWeight = newWeight;
-  w.currentReps = ex.repMin;
-
-  saveState();
-  render();
-  startRest(LIMITS.restSec);
-  hapticNotify('success');
-}
-
 function applyProgression(exId, ex, tempSets) {
-  if (ex.unit === 'свой вес') return null;
+  if (ex.unit === 'свой вес') return false;
   const wState = state.weights[exId];
-  if (!wState) return null;
+  if (!wState) return false;
 
-  // Проверяем, все ли подходы выполнены на целевую норму
   const allSuccess = tempSets.every(s => s.reps >= wState.targetReps);
   if (!allSuccess) {
-    wState.streak = 0; // Сбрасываем счетчик при провале
-    return null;
+    wState.streak = 0; 
+    return false;
   }
 
-  // Начисляем успешную сессию
   wState.streak = (wState.streak || 0) + 1;
 
-  // Если успешных сессий меньше 2, просто хвалим и оставляем цель прежней
   if (wState.streak < 2) {
-    return `🔥 Отлично! Ещё одна успешная сессия на ${wState.targetReps} повторений — и перейдём на следующую ступень.`;
+    return false; 
   }
 
-  // ВЫЧИСЛЯЕМ 3 СТУПЕНИ для конкретного упражнения
-  const step1 = ex.repMin; // Например, 10
-  const step2 = ex.repMin + 2; // Например, 12
-  // Если +4 выходит за рамки максимума в базе, берем максимум из базы (например, 20 для икр)
+  const step1 = ex.repMin;
+  const step2 = ex.repMin + 2;
   const step3 = Math.max(ex.repMin + 4, ex.repMax); 
 
-  wState.streak = 0; // Сбрасываем счетчик, так как мы делаем шаг
+  if (wState.targetReps >= step3) {
+    return true; // Пора спрашивать про вес
+  }
 
-  // Определяем, куда двигаться дальше
-  if (wState.targetReps === step1) {
-    wState.targetReps = step2;
-    return `🚀 Ступень пройдена! В следующий раз: ${ex.sets} × ${step2}.`;
-  } 
+  wState.targetReps = (wState.targetReps === step1) ? step2 : step3;
+  wState.streak = 0;
+  return false;
+}
+
+function showWeightAskDialog(exId, ex, onDone) {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-backdrop modal-center" id="weightAskDialog">
+      <div class="modal modal-dialog">
+        <h3 style="margin-bottom:12px;">Как прошла тренировка?</h3>
+        <p class="dim small" style="margin-bottom:16px;">Ты сделал два раза по ${ex.repMax} повторений! Пора поднимать вес?</p>
+        <div class="weight-dialog-actions">
+          <button class="btn btn-secondary" id="btnNoWeight">🥵 Тяжело</button>
+          <button class="btn btn-primary" id="btnYesWeight">😌 Легко</button>
+        </div>
+      </div>
+    </div>
+  `);
   
-  if (wState.targetReps === step2) {
-    wState.targetReps = step3;
-    return `🚀 Ступень пройдена! В следующий раз: ${ex.sets} × ${step3}.`;
-  } 
-  
-  // Если мы уже на максимуме (step3), поднимаем ВЕС и сбрасываем на начало
-  const inc = ex.inc || 2.5;
-  wState.weight += inc;
-  wState.targetReps = step1;
-  
-  return `🎯 Максимум взят! В следующий раз: ${wState.weight} ${ex.unit}, ${ex.sets} × ${step1}.`;
+  document.getElementById('btnYesWeight').addEventListener('click', () => {
+    document.getElementById('weightAskDialog').remove();
+    const wState = state.weights[exId];
+    if (wState) {
+      const inc = ex.inc || 2.5;
+      wState.weight += inc;
+      wState.targetReps = ex.repMin;
+      wState.streak = 0;
+    }
+    saveState();
+    onDone();
+  });
+
+  document.getElementById('btnNoWeight').addEventListener('click', () => {
+    document.getElementById('weightAskDialog').remove();
+    const wState = state.weights[exId];
+    if (wState) {
+      wState.streak = 0;
+    }
+    saveState();
+    onDone();
+  });
 }
 
 async function beginWorkout(id) {
@@ -973,19 +901,8 @@ async function doneSet() {
     haptic('medium');
     saveState();
 
-    const targetReps = state.weights[exId]?.targetReps || ex.repMin;
-    const wantEffortAsk = !isBW
-      && !w.effortAsked
-      && reps >= ex.repMax
-      && targetReps < ex.repMax
-      && w.tempSets.length < ex.sets;
-
-    if (wantEffortAsk) {
-      showEffortDialog();
-    } else {
-      startRest(LIMITS.restSec);
-      refreshWorkoutUI();
-    }
+    startRest(LIMITS.restSec);
+    refreshWorkoutUI();
   } finally { doneSetRunning = false; }
 }
 
@@ -998,22 +915,31 @@ function advanceExercise() {
   const exId = day.exercises[w.exIdx];
   const ex = getExScheme(w.dayId, exId);
 
-  let progressMsg = null;
+  let needAskWeight = false;
+
   if (ex && w.tempSets.length > 0) {
     w.results.push({ id: exId, name: ex.name, sets: w.tempSets.slice(), note: w.currentNote || '' });
-    progressMsg = applyProgression(exId, ex, w.tempSets);
+    needAskWeight = applyProgression(exId, ex, w.tempSets); 
   }
-  w.tempSets = []; w.currentNote = ''; w.exIdx++; w.effortAsked = false;
+  
+  w.tempSets = []; w.currentNote = ''; w.effortAsked = false;
 
-  if (w.exIdx >= day.exercises.length) {
-    finishWorkout();
-    if (progressMsg) setTimeout(() => uiAlert(progressMsg), 200);
-    return;
+  const proceedToNext = () => {
+    w.exIdx++;
+    if (w.exIdx >= day.exercises.length) {
+      finishWorkout();
+    } else {
+      const sv = startValues(w.dayId, day.exercises[w.exIdx]);
+      w.currentWeight = sv.weight; w.currentReps = sv.reps; state.rest = null;
+      haptic('light'); saveState(); render();
+    }
+  };
+
+  if (needAskWeight) {
+    showWeightAskDialog(exId, ex, proceedToNext);
+  } else {
+    proceedToNext();
   }
-  const sv = startValues(w.dayId, day.exercises[w.exIdx]);
-  w.currentWeight = sv.weight; w.currentReps = sv.reps; state.rest = null;
-  haptic('light'); saveState(); render();
-  if (progressMsg) setTimeout(() => uiAlert(progressMsg), 200);
 }
 
 function skipExercise() {
