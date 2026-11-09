@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: ВОЗВРАТ К РАБОЧЕЙ ВЕРСИИ (fetch + DOMParser + Blob URL), которая успешно рисовала мышцы.
+ * Описание: Обход кэша SW, использование data:image/svg+xml для 100% работы в WebView.
  */
 
 import { EXERCISES } from './data.js';
@@ -23,66 +23,52 @@ const MUSCLE_MAP = {
 
 async function loadAndColorSvg(svgPath, hitMuscles) {
   try {
-    const response = await fetch(svgPath);
+    // 1. Жестко обходим кэш Service Worker
+    const response = await fetch(svgPath, { cache: 'no-store' });
     if (!response.ok) return null; 
     
     const svgText = await response.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    const svgEl = doc.documentElement;
 
-    // Удаляем стили и фильтры, которые могут ломать Canvas
-    doc.querySelectorAll('style, filter, defs').forEach(el => el.remove());
+    // 2. Задаем жесткие размеры, чтобы Android не схлопнул картинку в 0x0
+    svgEl.setAttribute('width', '277');
+    svgEl.setAttribute('height', '495');
 
-    // Красим базу в темный
-    doc.querySelectorAll('.body-part').forEach(el => {
-      el.setAttribute('fill', '#1C1C21');
-      el.removeAttribute('style');
-      el.removeAttribute('class');
-    });
+    // 3. Инжектим свои стили ПОВЕРХ существующих (не удаляя ничего)
+    let customCss = `
+      .body-part { fill: #1C1C21 !important; }
+      .muscle { fill: #1C1C21 !important; }
+    `;
 
-    // Красим все мышцы в темный
-    doc.querySelectorAll('.muscle').forEach(el => {
-      el.setAttribute('fill', '#1C1C21');
-      el.removeAttribute('style');
-      el.removeAttribute('class');
-    });
-
-    // Красим нагруженные в лайм
     hitMuscles.forEach(group => {
       const ids = MUSCLE_MAP[group] || [];
       ids.forEach(id => {
-        const el = doc.getElementById(id);
-        if (el) {
-          el.setAttribute('fill', '#CCFF00');
-          el.removeAttribute('style');
-          el.querySelectorAll('*').forEach(child => {
-             child.setAttribute('fill', '#CCFF00');
-             child.removeAttribute('style');
-          });
-        }
+        customCss += `#${id} { fill: #CCFF00 !important; }\n`;
       });
     });
 
-    // Конвертируем в Blob URL
+    const styleEl = doc.createElement('style');
+    styleEl.textContent = customCss;
+    svgEl.insertBefore(styleEl, svgEl.firstChild);
+
+    // 4. Сериализуем и делаем Data URI (вместо Blob)
     const serializer = new XMLSerializer();
     const coloredSvgStr = serializer.serializeToString(doc);
-    const blob = new Blob([coloredSvgStr], {type: 'image/svg+xml;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
+    
+    // Кодируем строку, чтобы не было проблем с кириллицей и символами
+    const encodedSvg = encodeURIComponent(coloredSvgStr).replace(/'/g, '%27').replace(/"/g, '%22');
+    const url = `data:image/svg+xml;charset=utf-8,${encodedSvg}`;
 
     return await new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve(img);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(null);
-      };
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
       img.src = url;
     });
   } catch (e) {
-    console.error(e);
+    console.error('Ошибка загрузки SVG:', svgPath, e);
     return null;
   }
 }
@@ -164,7 +150,7 @@ export async function generateShareCard(historyItem) {
   const imgW = 280;
   const imgH = 500;
 
-  // Просто рисуем, если загрузились. Без красных ошибок.
+  // Просто рисуем, если загрузились
   if (frontImg && backImg) {
     ctx.drawImage(frontImg, 230, imgY, imgW, imgH);
     ctx.drawImage(backImg, 570, imgY, imgW, imgH);
