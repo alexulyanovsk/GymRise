@@ -2,18 +2,71 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Экспериментальный анатомический силуэт через Path2D.
+ * Описание: Финальная карта мышц с загрузкой SVG и умной подсветкой.
  */
 
 import { EXERCISES } from './data.js';
 
-const loadImage = (src) => new Promise((resolve, reject) => {
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = () => resolve(img);
-  img.onerror = reject;
-  img.src = src;
-});
+// Карта соответствия наших групп мышц и ID внутри SVG-файлов
+const MUSCLE_MAP = {
+  'Грудь': ['pectorals'],
+  'Спина': ['lowerback', 'trapezoidback', 'trapezoid'],
+  'Плечи (Перед/Сред)': ['deltoids', 'backdeltoids'],
+  'Плечи (Зад)': ['backdeltoids'],
+  'Бицепс': ['biceps'],
+  'Трицепс': ['triceps'],
+  'Кор': ['abdomen'],
+  'Квадрицепс': ['quadriceps'],
+  'Бицепс бедра': ['hamstrings'],
+  'Ягодицы': ['gluteus', 'abductors'],
+  'Икры': ['gastrocnemius', 'tibialis', 'lowerleg']
+};
+
+// Вспомогательная функция: скачивает SVG, красит нужные мышцы и возвращает как картинку
+async function loadAndColorSvg(svgPath, hitMuscles) {
+  try {
+    const response = await fetch(svgPath);
+    const svgText = await response.text();
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    
+    // 1. Красим ВСЕ мышцы в темно-серый цвет, убирая классы (чтобы CSS не перебивал)
+    const muscles = doc.querySelectorAll('.muscle');
+    muscles.forEach(m => {
+      m.style.fill = '#1C1C21'; 
+      m.removeAttribute('class'); 
+    });
+    
+    // 2. Красим НАГРУЖЕННЫЕ мышцы в лаймовый
+    hitMuscles.forEach(group => {
+      const ids = MUSCLE_MAP[group] || [];
+      ids.forEach(id => {
+        const el = doc.getElementById(id);
+        if (el) el.style.fill = '#CCFF00';
+      });
+    });
+    
+    // 3. Конвертируем обратно в картинку
+    const serializer = new XMLSerializer();
+    const coloredSvgStr = serializer.serializeToString(doc);
+    const blob = new Blob([coloredSvgStr], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  } catch (e) {
+    console.error('Ошибка загрузки SVG:', svgPath, e);
+    return null;
+  }
+}
 
 export async function generateShareCard(historyItem) {
   const canvas = document.createElement('canvas');
@@ -25,7 +78,7 @@ export async function generateShareCard(historyItem) {
   ctx.fillStyle = '#09090B';
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 2. Градиент (в правом нижнем углу)
+  // 2. Градиент в правом нижнем углу
   const gradient = ctx.createRadialGradient(1080, 1920, 0, 1080, 1920, 1000);
   gradient.addColorStop(0, 'rgba(204, 255, 0, 0.15)');
   gradient.addColorStop(1, 'rgba(9, 9, 11, 0)');
@@ -34,13 +87,13 @@ export async function generateShareCard(historyItem) {
 
   // 3. Логотип
   try {
-    const logo = await loadImage('./icon.svg');
+    const logo = await new Promise((res, rej) => {
+      const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = './icon.svg';
+    });
     ctx.drawImage(logo, 460, 120, 160, 160);
   } catch (e) {
     ctx.fillStyle = '#CCFF00';
     ctx.fillRect(460, 210, 160, 15);
-    ctx.beginPath(); ctx.arc(460, 218, 30, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(620, 218, 30, 0, Math.PI * 2); ctx.fill();
   }
 
   // 4. Заголовок
@@ -77,14 +130,30 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 120px Manrope, sans-serif';
   ctx.fillText(`${Math.round(totalVolume)} кг`, 540, startY + 110);
 
-  // 6. Карта мышц (Path2D)
+  // 6. Загрузка и отрисовка карты мышц
   const hitMuscles = new Set();
   historyItem.exercises.forEach(ex => {
     const base = EXERCISES[ex.id];
     if (base) hitMuscles.add(base.muscle);
   });
 
-  drawAnatomicalMap(ctx, hitMuscles);
+  // Загружаем обе картинки параллельно
+  const [frontImg, backImg] = await Promise.all([
+    loadAndColorSvg('./assets/body-front.svg', hitMuscles),
+    loadAndColorSvg('./assets/body-back.svg', hitMuscles)
+  ]);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8E8E93';
+  ctx.font = '600 32px Manrope, sans-serif';
+  ctx.fillText('Нагруженные мышцы', 540, startY + 220);
+
+  const imgY = startY + 260;
+  const imgW = 280;
+  const imgH = 500;
+
+  if (frontImg) ctx.drawImage(frontImg, 230, imgY, imgW, imgH); // Спереди (слева)
+  if (backImg) ctx.drawImage(backImg, 570, imgY, imgW, imgH);  // Сзади (справа)
 
   // 7. Футер
   ctx.fillStyle = '#8E8E93';
@@ -95,7 +164,7 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 8. Конвертация
+  // 8. Конвертация в файл и шеринг
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
@@ -117,61 +186,4 @@ export async function generateShareCard(historyItem) {
       }
     }, 'image/png');
   });
-}
-
-// Отрисовка силуэта через Path2D
-function drawAnatomicalMap(ctx, hitMuscles) {
-  const cx = 540;
-  const cy = 1250; 
-  const accent = '#CCFF00';
-  const base = '#1C1C21'; 
-
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(1.8, 1.8); // Размер человечка
-
-  // Вспомогательная функция для отрисовки
-  const drawPart = (pathStr, isHit) => {
-    const p = new Path2D(pathStr);
-    ctx.fillStyle = isHit ? accent : base;
-    ctx.fill(p);
-  };
-
-  // 1. Голова (всегда серая)
-  ctx.fillStyle = base;
-  ctx.beginPath(); ctx.arc(0, -130, 20, 0, Math.PI * 2); ctx.fill();
-
-  // 2. Плечи (Дельты)
-  const hitShoulders = hitMuscles.has('Плечи (Перед/Сред)') || hitMuscles.has('Плечи (Зад)');
-  drawPart('M -30 -100 C -55 -100 -55 -70 -35 -70 L -25 -70 Z', hitShoulders); // Левое
-  drawPart('M 30 -100 C 55 -100 55 -70 35 -70 L 25 -70 Z', hitShoulders);    // Правое
-
-  // 3. Грудь / Спина (Торс)
-  drawPart('M -30 -100 Q 0 -115 30 -100 L 25 -50 Q 0 -40 -25 -50 Z', hitMuscles.has('Грудь'));
-
-  // 4. Руки (Бицепс/Трицепс)
-  const hitArms = hitMuscles.has('Бицепс') || hitMuscles.has('Трицепс');
-  drawPart('M -35 -65 Q -45 -30 -45 20 L -25 20 Q -25 -30 -20 -65 Z', hitArms); // Левая
-  drawPart('M 35 -65 Q 45 -30 45 20 L 25 20 Q 25 -30 20 -65 Z', hitArms);    // Правая
-
-  // 5. Пресс (Кор)
-  drawPart('M -25 -45 L 25 -45 L 20 20 L -20 20 Z', hitMuscles.has('Кор'));
-
-  // 6. Ноги (Верхняя часть)
-  const hitLegs = hitMuscles.has('Квадрицепс') || hitMuscles.has('Бицепс бедра') || hitMuscles.has('Ягодицы');
-  drawPart('M -25 30 Q -35 80 -30 140 L -5 140 Q -10 80 0 30 Z', hitLegs); // Левая
-  drawPart('M 25 30 Q 35 80 30 140 L 5 140 Q 10 80 0 30 Z', hitLegs);    // Правая
-
-  // 7. Икры
-  const hitCalves = hitMuscles.has('Икры');
-  drawPart('M -25 150 Q -30 180 -20 210 L -5 210 Q -10 180 -5 150 Z', hitCalves); // Левая
-  drawPart('M 25 150 Q 30 180 20 210 L 5 210 Q 10 180 5 150 Z', hitCalves);    // Правая
-
-  ctx.restore();
-
-  // Подпись
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#8E8E93';
-  ctx.font = '600 32px Manrope, sans-serif';
-  ctx.fillText('Нагруженные мышцы', cx, cy - 280);
 }
