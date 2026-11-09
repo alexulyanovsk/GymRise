@@ -1,9 +1,9 @@
 /**
  * GymRise
  * Файл: js/ui.js
- * Версия: 19.0.0
+ * Версия: 20.0.0
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Бесшумная прогрессия до максимума. Опрос только перед поднятием веса.
+ * Описание: Применяем динамический restSec из схемы упражнения.
  */
 
 import {
@@ -901,7 +901,10 @@ async function doneSet() {
     haptic('medium');
     saveState();
 
-    startRest(LIMITS.restSec);
+    // ИСПОЛЬЗУЕМ ДИНАМИЧЕСКИЙ ТАЙМЕР
+    const restTime = ex.restSec || LIMITS.restSec;
+    startRest(restTime);
+    
     refreshWorkoutUI();
   } finally { doneSetRunning = false; }
 }
