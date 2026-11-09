@@ -1,11 +1,11 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 70.0.0
+ * Версия: 73.0.0
  * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymrise-v70';
+const CACHE_NAME = 'gymrise-v73';
 
 const APP_SHELL = [
   './',
@@ -15,8 +15,8 @@ const APP_SHELL = [
   './icon.svg',
   './icon-maskable.svg',
   './screenshot-1.png',
-  './assets/body-front.svg', // <-- ДОБАВИЛИ
-  './assets/body-back.svg',  // <-- ДОБАВИЛИ
+  './assets/body-front.svg',
+  './assets/body-back.svg',
   './js/boot.js',
   './js/main.js',
   './js/ui.js',
