@@ -1,11 +1,11 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 68.0.0
+ * Версия: 70.0.0
  * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymrise-v68';
+const CACHE_NAME = 'gymrise-v70';
 
 const APP_SHELL = [
   './',
@@ -15,6 +15,8 @@ const APP_SHELL = [
   './icon.svg',
   './icon-maskable.svg',
   './screenshot-1.png',
+  './assets/body-front.svg', // <-- ДОБАВИЛИ
+  './assets/body-back.svg',  // <-- ДОБАВИЛИ
   './js/boot.js',
   './js/main.js',
   './js/ui.js',
@@ -102,7 +104,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  if (url.pathname.includes('.js') || url.pathname.includes('.css')) {
+  if (url.pathname.includes('.js') || url.pathname.includes('.css') || url.pathname.includes('.svg')) {
     e.respondWith(
       caches.match(e.request).then((cached) => {
         const fetchPromise = fetch(e.request).then((res) => {
