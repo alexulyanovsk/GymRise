@@ -2,12 +2,11 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Финальная карта мышц с загрузкой SVG и умной подсветкой.
+ * Описание: Генерация карточки с анатомической картой мышц из папки assets.
  */
 
 import { EXERCISES } from './data.js';
 
-// Карта соответствия наших групп мышц и ID внутри SVG-файлов
 const MUSCLE_MAP = {
   'Грудь': ['pectorals'],
   'Спина': ['lowerback', 'trapezoidback', 'trapezoid'],
@@ -22,23 +21,38 @@ const MUSCLE_MAP = {
   'Икры': ['gastrocnemius', 'tibialis', 'lowerleg']
 };
 
-// Вспомогательная функция: скачивает SVG, красит нужные мышцы и возвращает как картинку
 async function loadAndColorSvg(svgPath, hitMuscles) {
   try {
     const response = await fetch(svgPath);
+    if (!response.ok) {
+      console.warn('Файл не найден:', svgPath);
+      return null; 
+    }
     const svgText = await response.text();
     
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
     
-    // 1. Красим ВСЕ мышцы в темно-серый цвет, убирая классы (чтобы CSS не перебивал)
+    const svgElement = doc.documentElement;
+    // Задаем жесткие размеры, чтобы избежать багов рендеринга на Android
+    svgElement.setAttribute('width', '277');
+    svgElement.setAttribute('height', '495');
+
+    // 1. Красим базовый контур тела в темно-серый
+    const bodyParts = doc.querySelectorAll('.body-part');
+    bodyParts.forEach(p => {
+      p.style.fill = '#1C1C21'; 
+      p.removeAttribute('class'); 
+    });
+
+    // 2. Красим ВСЕ мышцы в темно-серый
     const muscles = doc.querySelectorAll('.muscle');
     muscles.forEach(m => {
       m.style.fill = '#1C1C21'; 
       m.removeAttribute('class'); 
     });
     
-    // 2. Красим НАГРУЖЕННЫЕ мышцы в лаймовый
+    // 3. Красим НАГРУЖЕННЫЕ мышцы в лаймовый
     hitMuscles.forEach(group => {
       const ids = MUSCLE_MAP[group] || [];
       ids.forEach(id => {
@@ -47,23 +61,26 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
       });
     });
     
-    // 3. Конвертируем обратно в картинку
+    // Конвертируем обратно в картинку
     const serializer = new XMLSerializer();
     const coloredSvgStr = serializer.serializeToString(doc);
     const blob = new Blob([coloredSvgStr], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     
-    return new Promise((resolve, reject) => {
+    return await new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         URL.revokeObjectURL(url);
         resolve(img);
       };
-      img.onerror = reject;
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null); 
+      };
       img.src = url;
     });
   } catch (e) {
-    console.error('Ошибка загрузки SVG:', svgPath, e);
+    console.error('Ошибка парсинга SVG:', svgPath, e);
     return null;
   }
 }
@@ -137,25 +154,29 @@ export async function generateShareCard(historyItem) {
     if (base) hitMuscles.add(base.muscle);
   });
 
-  // Загружаем обе картинки параллельно
+  // Загружаем из папки assets
   const [frontImg, backImg] = await Promise.all([
     loadAndColorSvg('./assets/body-front.svg', hitMuscles),
     loadAndColorSvg('./assets/body-back.svg', hitMuscles)
   ]);
 
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#8E8E93';
-  ctx.font = '600 32px Manrope, sans-serif';
-  ctx.fillText('Нагруженные мышцы', 540, startY + 220);
+  // Рисуем, только если картинки загрузились
+  if (frontImg || backImg) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8E8E93';
+    ctx.font = '600 32px Manrope, sans-serif';
+    ctx.fillText('Нагруженные мышцы', 540, startY + 220);
 
-  const imgY = startY + 260;
-  const imgW = 280;
-  const imgH = 500;
+    const imgY = startY + 260;
+    const imgW = 280;
+    const imgH = 500;
 
-  if (frontImg) ctx.drawImage(frontImg, 230, imgY, imgW, imgH); // Спереди (слева)
-  if (backImg) ctx.drawImage(backImg, 570, imgY, imgW, imgH);  // Сзади (справа)
+    if (frontImg) ctx.drawImage(frontImg, 230, imgY, imgW, imgH); // Спереди
+    if (backImg) ctx.drawImage(backImg, 570, imgY, imgW, imgH);  // Сзади
+  }
 
   // 7. Футер
+  ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 32px Manrope, sans-serif';
   ctx.fillText('Умный трекер тренировок', 540, 1750);
@@ -164,7 +185,7 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 8. Конвертация в файл и шеринг
+  // 8. Конвертация и вызов шаринга
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
