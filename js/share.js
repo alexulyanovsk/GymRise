@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Надежная отрисовка SVG через Base64 без DOMParser.
+ * Описание: Версия с Blob URL и визуальной отладкой ошибок.
  */
 
 import { EXERCISES } from './data.js';
@@ -24,47 +24,66 @@ const MUSCLE_MAP = {
 async function loadAndColorSvg(svgPath, hitMuscles) {
   try {
     const response = await fetch(svgPath);
-    if (!response.ok) {
-      console.warn('Файл не найден:', svgPath);
-      return null; 
-    }
-    let svgText = await response.text();
+    if (!response.ok) return null; 
+    
+    const svgText = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, 'image/svg+xml');
 
-    // 1. Заменяем базовые цвета на темно-серый
-    svgText = svgText.replace(/\.body-part\s*\{[^}]*\}/g, '.body-part { fill: #1C1C21 !important; }');
-    svgText = svgText.replace(/\.muscle\s*\{[^}]*\}/g, '.muscle { fill: #1C1C21 !important; }');
+    // Удаляем стили и фильтры, которые могут ломать Canvas
+    doc.querySelectorAll('style, filter, defs').forEach(el => el.remove());
 
-    // 2. Собираем CSS для нагруженных мышц
-    let hitCss = '';
+    // Красим базу в темный
+    doc.querySelectorAll('.body-part').forEach(el => {
+      el.setAttribute('fill', '#1C1C21');
+      el.removeAttribute('style');
+      el.removeAttribute('class');
+    });
+
+    // Красим все мышцы в темный
+    doc.querySelectorAll('.muscle').forEach(el => {
+      el.setAttribute('fill', '#1C1C21');
+      el.removeAttribute('style');
+      el.removeAttribute('class');
+    });
+
+    // Красим нагруженные в лайм
     hitMuscles.forEach(group => {
       const ids = MUSCLE_MAP[group] || [];
       ids.forEach(id => {
-        hitCss += `#${id} { fill: #CCFF00 !important; }\n`;
+        const el = doc.getElementById(id);
+        if (el) {
+          el.setAttribute('fill', '#CCFF00');
+          el.removeAttribute('style');
+          // На всякий случай красим всех детей
+          el.querySelectorAll('*').forEach(child => {
+             child.setAttribute('fill', '#CCFF00');
+             child.removeAttribute('style');
+          });
+        }
       });
     });
 
-    // 3. Внедряем CSS
-    if (svgText.includes('</style>')) {
-      svgText = svgText.replace('</style>', `${hitCss}</style>`);
-    } else {
-      svgText = svgText.replace(/(<svg[^>]*>)/, `$1<style>${hitCss}</style>`);
-    }
-
-    // 4. Конвертируем в Base64 (самый надежный метод для Canvas)
-    const base64Svg = btoa(unescape(encodeURIComponent(svgText)));
-    const url = `data:image/svg+xml;base64,${base64Svg}`;
+    // Конвертируем в Blob URL (самый совместимый метод)
+    const serializer = new XMLSerializer();
+    const coloredSvgStr = serializer.serializeToString(doc);
+    const blob = new Blob([coloredSvgStr], {type: 'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
 
     return await new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = (err) => {
-        console.error('Ошибка загрузки SVG', err);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
         resolve(null);
       };
       img.src = url;
     });
   } catch (e) {
-    console.error('Ошибка парсинга SVG:', svgPath, e);
+    console.error(e);
     return null;
   }
 }
@@ -75,18 +94,15 @@ export async function generateShareCard(historyItem) {
   canvas.height = 1920;
   const ctx = canvas.getContext('2d');
 
-  // 1. Фон
   ctx.fillStyle = '#09090B';
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 2. Градиент в правом нижнем углу
   const gradient = ctx.createRadialGradient(1080, 1920, 0, 1080, 1920, 1000);
   gradient.addColorStop(0, 'rgba(204, 255, 0, 0.15)');
   gradient.addColorStop(1, 'rgba(9, 9, 11, 0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 3. Логотип
   try {
     const logo = await new Promise((res, rej) => {
       const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = './icon.svg';
@@ -97,7 +113,6 @@ export async function generateShareCard(historyItem) {
     ctx.fillRect(460, 210, 160, 15);
   }
 
-  // 4. Заголовок
   ctx.fillStyle = '#FFFFFF';
   ctx.font = 'bold 84px Manrope, sans-serif';
   ctx.textAlign = 'center';
@@ -112,7 +127,6 @@ export async function generateShareCard(historyItem) {
   ctx.font = '500 36px Manrope, sans-serif';
   ctx.fillText(date, 540, 495);
 
-  // 5. Общий тоннаж
   let startY = 620;
   let totalVolume = 0;
   historyItem.exercises.forEach(exData => {
@@ -131,7 +145,6 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 120px Manrope, sans-serif';
   ctx.fillText(`${Math.round(totalVolume)} кг`, 540, startY + 110);
 
-  // 6. Загрузка и отрисовка карты мышц
   const hitMuscles = new Set();
   historyItem.exercises.forEach(ex => {
     const base = EXERCISES[ex.id];
@@ -143,22 +156,26 @@ export async function generateShareCard(historyItem) {
     loadAndColorSvg('./assets/body-back.svg', hitMuscles)
   ]);
 
-  if (frontImg || backImg) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#8E8E93';
-    ctx.font = '600 32px Manrope, sans-serif';
-    ctx.fillText('Нагруженные мышцы', 540, startY + 220);
+  // Всегда пишем заголовок, чтобы видеть, что код дошел до сюда
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8E8E93';
+  ctx.font = '600 32px Manrope, sans-serif';
+  ctx.fillText('Нагруженные мышцы', 540, startY + 220);
 
-    const imgY = startY + 260;
-    const imgW = 280;
-    const imgH = 500;
+  const imgY = startY + 260;
+  const imgW = 280;
+  const imgH = 500;
 
-    if (frontImg) ctx.drawImage(frontImg, 230, imgY, imgW, imgH);
-    if (backImg) ctx.drawImage(backImg, 570, imgY, imgW, imgH);
+  if (frontImg && backImg) {
+    ctx.drawImage(frontImg, 230, imgY, imgW, imgH);
+    ctx.drawImage(backImg, 570, imgY, imgW, imgH);
+  } else {
+    // Если картинки не загрузились - рисуем красную заглушку для отладки
+    ctx.fillStyle = '#FF453A';
+    ctx.font = 'bold 30px Manrope, sans-serif';
+    ctx.fillText('Ошибка загрузки карты', 540, imgY + 200);
   }
 
-  // 7. Футер
-  ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
   ctx.font = '500 32px Manrope, sans-serif';
   ctx.fillText('Умный трекер тренировок', 540, 1750);
@@ -167,7 +184,6 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 8. Конвертация и шеринг
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
