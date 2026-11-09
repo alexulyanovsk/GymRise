@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Финальная версия через data:image/svg+xml + encodeURIComponent.
+ * Описание: Уникальное имя файла для предотвращения кэширования в мессенджерах.
  */
 
 import { EXERCISES } from './data.js';
@@ -30,22 +30,18 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
     
-    // 1. Удаляем старые стили, чтобы ничего не конфликтовало
     doc.querySelectorAll('style').forEach(el => el.remove());
     
-    // 2. Жестко задаем размеры (чтобы Android не сделал картинку 0x0)
     const svgEl = doc.documentElement;
     svgEl.setAttribute('width', '277');
     svgEl.setAttribute('height', '495');
 
-    // 3. Красим базу в темный
     doc.querySelectorAll('.body-part').forEach(el => {
       el.setAttribute('fill', '#1C1C21');
       el.removeAttribute('class');
       el.removeAttribute('style');
     });
 
-    // 4. Красим все мышцы в темный
     doc.querySelectorAll('.muscle').forEach(el => {
       el.setAttribute('fill', '#1C1C21');
       el.removeAttribute('class');
@@ -56,7 +52,6 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
       });
     });
 
-    // 5. Красим нагруженные в лайм
     hitMuscles.forEach(group => {
       const ids = MUSCLE_MAP[group] || [];
       ids.forEach(id => {
@@ -70,7 +65,6 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
       });
     });
 
-    // 6. Конвертируем в безопасный Data URI (вместо Blob и Base64)
     const serializer = new XMLSerializer();
     const coloredSvgStr = serializer.serializeToString(doc);
     const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(coloredSvgStr)}`;
@@ -170,10 +164,6 @@ export async function generateShareCard(historyItem) {
   if (frontImg && backImg) {
     ctx.drawImage(frontImg, 230, imgY, imgW, imgH);
     ctx.drawImage(backImg, 570, imgY, imgW, imgH);
-  } else {
-    ctx.fillStyle = '#FF453A';
-    ctx.font = 'bold 30px Manrope, sans-serif';
-    ctx.fillText('Ошибка загрузки карты', 540, imgY + 200);
   }
 
   ctx.fillStyle = '#8E8E93';
@@ -187,7 +177,10 @@ export async function generateShareCard(historyItem) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
-      const file = new File([blob], 'gymrise_workout.png', { type: 'image/png' });
+      
+      // ИСПОЛЬЗУЕМ УНИКАЛЬНОЕ ИМЯ ФАЙЛА
+      const uniqueFileName = `gymrise_${historyItem.ts}.png`;
+      const file = new File([blob], uniqueFileName, { type: 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -198,7 +191,7 @@ export async function generateShareCard(historyItem) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'gymrise_workout.png';
+        a.download = uniqueFileName;
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         resolve(true);
