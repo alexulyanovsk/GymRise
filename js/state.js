@@ -27,7 +27,8 @@ export function getExScheme(dayId, exId) {
     ...base,
     sets: Number.isFinite(o.sets) ? o.sets : base.sets,
     repMin: Number.isFinite(o.repMin) ? o.repMin : base.repMin,
-    repMax: Number.isFinite(o.repMax) ? o.repMax : base.repMax
+    repMax: Number.isFinite(o.repMax) ? o.repMax : base.repMax,
+    restSec: Number.isFinite(o.restSec) ? o.restSec : LIMITS.restSec // <-- Читаем время отдыха
   };
 }
 
@@ -43,13 +44,19 @@ function sanitizeDaySchemes(d, exIdSet) {
     const sets = Number(s.sets);
     const repMin = Number(s.repMin);
     const repMax = Number(s.repMax);
+    const restSec = Number(s.restSec);
+    
     if (!Number.isFinite(sets) || sets < 1 || sets > 20 ||
         !Number.isFinite(repMin) || repMin < 1 || repMin > 200 ||
         !Number.isFinite(repMax) || repMax < repMin || repMax > 500) {
       delete d.schemes[exId];
       continue;
     }
-    d.schemes[exId] = { sets, repMin, repMax };
+    
+    d.schemes[exId] = { 
+      sets, repMin, repMax, 
+      restSec: (Number.isFinite(restSec) && restSec >= 15 && restSec <= 600) ? restSec : 90 // <-- Валидация времени отдыха
+    };
   }
 }
 
