@@ -1,10 +1,10 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 75.0.0
+ * Версия: 80.0.0
  */
 
-const CACHE_NAME = 'gymrise-v75';
+const CACHE_NAME = 'gymrise-v80';
 
 const APP_SHELL = [
   './',
