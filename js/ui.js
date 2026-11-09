@@ -1,9 +1,9 @@
 /**
  * GymRise
  * Файл: js/ui.js
- * Версия: 15.0.0
+ * Версия: 16.0.0
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Интегрирована генерация карточки для шеринга.
+ * Описание: Новая логика прогрессии (два шага по +2 повторения, затем вес).
  */
 
 import {
@@ -14,7 +14,7 @@ import { M, EX_ENTRIES, EXERCISES, LIMITS } from './data.js';
 import { $, e, fn, pn, rs, ws, fd } from './utils.js';
 import { tg, haptic, hapticNotify, uiConfirm, uiAlert, enableCloseConfirm, disableCloseConfirm } from './bridge.js';
 import { generatePlan } from './generator.js';
-import { generateShareCard } from './share.js'; // Подключаем модуль шеринга
+import { generateShareCard } from './share.js'; 
 
 let restTicker = null;
 let lastMainBtnAt = 0;
@@ -22,7 +22,7 @@ let lastSyncKey = '';
 let prevRenderKey = '';
 let doneSetRunning = false;
 let csvExportRunning = false;
-let shareRunning = false; // Защита от двойного клика
+let shareRunning = false; 
 let generatorOptions = { goal: 'hypertrophy', days: 4, equipment: ['barbell', 'dumbbell', 'machine'], excludedGroups: [] };
 
 const ICON = {
@@ -876,35 +876,46 @@ function applyProgression(exId, ex, tempSets) {
   const wState = state.weights[exId];
   if (!wState) return null;
 
+  // Проверяем, все ли подходы выполнены на целевую норму
   const allSuccess = tempSets.every(s => s.reps >= wState.targetReps);
   if (!allSuccess) {
-    wState.streak = 0;
+    wState.streak = 0; // Сбрасываем счетчик при провале
     return null;
   }
 
+  // Начисляем успешную сессию
   wState.streak = (wState.streak || 0) + 1;
 
+  // Если успешных сессий меньше 2, просто хвалим и оставляем цель прежней
   if (wState.streak < 2) {
     return `🔥 Отлично! Ещё одна успешная сессия на ${wState.targetReps} повторений — и перейдём на следующую ступень.`;
   }
 
-  if (wState.targetReps < ex.repMax) {
-    let newTarget;
-    if (wState.targetReps <= ex.repMin) newTarget = 10;
-    else if (wState.targetReps <= 10) newTarget = 12;
-    else newTarget = ex.repMax;
-    if (newTarget > ex.repMax) newTarget = ex.repMax;
+  // ВЫЧИСЛЯЕМ 3 СТУПЕНИ для конкретного упражнения
+  const step1 = ex.repMin; // Например, 10
+  const step2 = ex.repMin + 2; // Например, 12
+  // Если +4 выходит за рамки максимума в базе, берем максимум из базы (например, 20 для икр)
+  const step3 = Math.max(ex.repMin + 4, ex.repMax); 
 
-    wState.targetReps = newTarget;
-    wState.streak = 0;
-    return `🚀 Ступень пройдена! В следующий раз: ${ex.sets} × ${newTarget}.`;
-  }
+  wState.streak = 0; // Сбрасываем счетчик, так как мы делаем шаг
 
+  // Определяем, куда двигаться дальше
+  if (wState.targetReps === step1) {
+    wState.targetReps = step2;
+    return `🚀 Ступень пройдена! В следующий раз: ${ex.sets} × ${step2}.`;
+  } 
+  
+  if (wState.targetReps === step2) {
+    wState.targetReps = step3;
+    return `🚀 Ступень пройдена! В следующий раз: ${ex.sets} × ${step3}.`;
+  } 
+  
+  // Если мы уже на максимуме (step3), поднимаем ВЕС и сбрасываем на начало
   const inc = ex.inc || 2.5;
   wState.weight += inc;
-  wState.targetReps = ex.repMin;
-  wState.streak = 0;
-  return `🎯 Максимум взят! В следующий раз: ${wState.weight} ${ex.unit}, ${ex.sets} × ${ex.repMin}.`;
+  wState.targetReps = step1;
+  
+  return `🎯 Максимум взят! В следующий раз: ${wState.weight} ${ex.unit}, ${ex.sets} × ${step1}.`;
 }
 
 async function beginWorkout(id) {
@@ -1436,7 +1447,6 @@ export const ACTIONS = {
   removeExFromDayEdit: el => removeExFromDayEdit(el.dataset.day, Number(el.dataset.idx)),
   deleteDay: el => deleteDay(el.dataset.id),
   
-  // Кнопка "Поделиться" на экране завершения тренировки
   shareWorkout: async () => {
     if (shareRunning) return;
     shareRunning = true;
