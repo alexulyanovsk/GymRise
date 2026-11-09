@@ -2,7 +2,7 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Генерация карточки с анатомической картой мышц из папки assets.
+ * Описание: Надежная отрисовка SVG через Base64 без DOMParser.
  */
 
 import { EXERCISES } from './data.js';
@@ -28,54 +28,38 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
       console.warn('Файл не найден:', svgPath);
       return null; 
     }
-    const svgText = await response.text();
-    
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(svgText, 'image/svg+xml');
-    
-    const svgElement = doc.documentElement;
-    // Задаем жесткие размеры, чтобы избежать багов рендеринга на Android
-    svgElement.setAttribute('width', '277');
-    svgElement.setAttribute('height', '495');
+    let svgText = await response.text();
 
-    // 1. Красим базовый контур тела в темно-серый
-    const bodyParts = doc.querySelectorAll('.body-part');
-    bodyParts.forEach(p => {
-      p.style.fill = '#1C1C21'; 
-      p.removeAttribute('class'); 
-    });
+    // 1. Заменяем базовые цвета на темно-серый
+    svgText = svgText.replace(/\.body-part\s*\{[^}]*\}/g, '.body-part { fill: #1C1C21 !important; }');
+    svgText = svgText.replace(/\.muscle\s*\{[^}]*\}/g, '.muscle { fill: #1C1C21 !important; }');
 
-    // 2. Красим ВСЕ мышцы в темно-серый
-    const muscles = doc.querySelectorAll('.muscle');
-    muscles.forEach(m => {
-      m.style.fill = '#1C1C21'; 
-      m.removeAttribute('class'); 
-    });
-    
-    // 3. Красим НАГРУЖЕННЫЕ мышцы в лаймовый
+    // 2. Собираем CSS для нагруженных мышц
+    let hitCss = '';
     hitMuscles.forEach(group => {
       const ids = MUSCLE_MAP[group] || [];
       ids.forEach(id => {
-        const el = doc.getElementById(id);
-        if (el) el.style.fill = '#CCFF00';
+        hitCss += `#${id} { fill: #CCFF00 !important; }\n`;
       });
     });
-    
-    // Конвертируем обратно в картинку
-    const serializer = new XMLSerializer();
-    const coloredSvgStr = serializer.serializeToString(doc);
-    const blob = new Blob([coloredSvgStr], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    
+
+    // 3. Внедряем CSS
+    if (svgText.includes('</style>')) {
+      svgText = svgText.replace('</style>', `${hitCss}</style>`);
+    } else {
+      svgText = svgText.replace(/(<svg[^>]*>)/, `$1<style>${hitCss}</style>`);
+    }
+
+    // 4. Конвертируем в Base64 (самый надежный метод для Canvas)
+    const base64Svg = btoa(unescape(encodeURIComponent(svgText)));
+    const url = `data:image/svg+xml;base64,${base64Svg}`;
+
     return await new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve(img);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(null); 
+      img.onload = () => resolve(img);
+      img.onerror = (err) => {
+        console.error('Ошибка загрузки SVG', err);
+        resolve(null);
       };
       img.src = url;
     });
@@ -154,13 +138,11 @@ export async function generateShareCard(historyItem) {
     if (base) hitMuscles.add(base.muscle);
   });
 
-  // Загружаем из папки assets
   const [frontImg, backImg] = await Promise.all([
     loadAndColorSvg('./assets/body-front.svg', hitMuscles),
     loadAndColorSvg('./assets/body-back.svg', hitMuscles)
   ]);
 
-  // Рисуем, только если картинки загрузились
   if (frontImg || backImg) {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#8E8E93';
@@ -171,8 +153,8 @@ export async function generateShareCard(historyItem) {
     const imgW = 280;
     const imgH = 500;
 
-    if (frontImg) ctx.drawImage(frontImg, 230, imgY, imgW, imgH); // Спереди
-    if (backImg) ctx.drawImage(backImg, 570, imgY, imgW, imgH);  // Сзади
+    if (frontImg) ctx.drawImage(frontImg, 230, imgY, imgW, imgH);
+    if (backImg) ctx.drawImage(backImg, 570, imgY, imgW, imgH);
   }
 
   // 7. Футер
@@ -185,7 +167,7 @@ export async function generateShareCard(historyItem) {
   ctx.font = 'bold 40px Manrope, sans-serif';
   ctx.fillText('GymRise', 540, 1820);
 
-  // 8. Конвертация и вызов шаринга
+  // 8. Конвертация и шеринг
   return new Promise((resolve, reject) => {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
