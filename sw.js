@@ -1,11 +1,11 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 64.0.0
+ * Версия: 68.0.0
  * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymrise-v64';
+const CACHE_NAME = 'gymrise-v68';
 
 const APP_SHELL = [
   './',
@@ -121,5 +121,3 @@ self.addEventListener('fetch', (e) => {
     caches.match(e.request).then((cached) => cached || fetch(e.request).catch(() => Response.error()))
   );
 });
-
-/* © Alexulyanovsk */
