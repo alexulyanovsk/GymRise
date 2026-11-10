@@ -5,8 +5,8 @@
  * Описание: SVG-пути для женской карты мышц.
  */
 
-export const FEMALE_FRONT_VIEWBOX = "0 0 1600 1500";
-export const FEMALE_BACK_VIEWBOX = "0 0 1600 1500";
+export const FEMALE_FRONT_VIEWBOX = "0 0 660 1440";
+export const FEMALE_BACK_VIEWBOX = "820 0 660 1450";
 
 export const femaleFront = {
   neck: [
