@@ -2,10 +2,11 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Поддержка женской фигуры для карты мышц.
+ * Описание: Добавлен импорт state для проверки пола.
  */
 
 import { EXERCISES } from './data.js';
+import { state } from './state.js'; // <-- ДОБАВЛЕН ИМПОРТ
 import { femaleFront, femaleBack, FEMALE_FRONT_VIEWBOX, FEMALE_BACK_VIEWBOX } from './femaleBody.js';
 
 const MUSCLE_MAP = {
