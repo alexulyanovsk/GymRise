@@ -1,7 +1,7 @@
 /**
  * Файл: js/generator.js
- * Версия: 2.3.0
- * Описание: Добавлено время отдыха в зависимости от цели.
+ * Версия: 2.6.0
+ * Описание: Учтены пол, возраст, ИМТ (влияние на отдых и подходы).
  */
 
 import { EXERCISES, EX_ENTRIES } from './data.js';
@@ -37,8 +37,46 @@ const GROUP_MAPPING = {
 };
 
 export function generatePlan(options) {
-  const { goal, exp, daysPerWeek, equipment, excludedGroups = [] } = options;
+  const { 
+    goal, exp, daysPerWeek, equipment, excludedGroups = [], 
+    bodyWeight = 80, height = 175, age = 30, gender = 'male' 
+  } = options;
 
+  // === 1. БАЗОВЫЕ ПАРАМЕТРЫ (ЦЕЛЬ) ===
+  let repMin = 8, repMax = 12;
+  let baseRest = 90;
+  if (goal === 'strength') { repMin = 4; repMax = 6; baseRest = 180; }
+  if (goal === 'endurance') { repMin = 15; repMax = 20; baseRest = 60; }
+
+  // === 2. КОРРЕКТИРОВКА ОТДЫХА ===
+  let kGenderRest = gender === 'female' ? 0.85 : 1.0;
+  let kAgeRest = 1.0;
+  if (age >= 60) kAgeRest = 0.8;
+  else if (age >= 50) kAgeRest = 0.9;
+  
+  const bmi = bodyWeight / Math.pow(height / 100, 2);
+  let kBMIRest = 1.0;
+  if (bmi < 18.5) kBMIRest = 1.15;
+  else if (bmi >= 25) kBMIRest = 0.85;
+
+  let finalRest = Math.round(baseRest * kGenderRest * kAgeRest * kBMIRest);
+  finalRest = Math.max(30, Math.min(300, finalRest));
+
+  // === 3. КОРРЕКТИРОВКА ПОДХОДОВ ===
+  let setsMod = 0;
+  if (exp === 'advanced') setsMod += 1;
+  if (age >= 50) setsMod -= 1;
+  if (bmi < 18.5) setsMod -= 1;
+  else if (bmi >= 25) setsMod += 1;
+
+  // === 4. СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ ПОДРОСТКОВ (14-17 лет) ===
+  let isTeen = age >= 14 && age < 18;
+  if (isTeen) {
+    repMin = 6; repMax = 12; // Безопасный диапазон
+    finalRest = Math.max(60, Math.min(90, finalRest)); // Фиксированный отдых
+  }
+
+  // === 5. ФИЛЬТРАЦИЯ УПРАЖНЕНИЙ ===
   let availableEx = EX_ENTRIES.filter(([id, ex]) => {
     if (equipment.includes('all')) return true;
     for (const eq of equipment) {
@@ -54,20 +92,18 @@ export function generatePlan(options) {
   const excludedRawMuscles = excludedGroups.flatMap(g => GROUP_MAPPING[g] || []);
   availableEx = availableEx.filter(id => !excludedRawMuscles.includes(EXERCISES[id].muscle));
 
+  // Подросткам и возрастным запрещаем опасные движения (прыжки, осевые)
+  if (isTeen || age >= 50) {
+    const bannedForAge = ['jump_rope', 'nordic_curl', 'sissy_squat', 'good_morning', 'back_deadlift'];
+    availableEx = availableEx.filter(id => !bannedForAge.includes(id));
+  }
+
   if (availableEx.length < 10) return null;
-
-  let repMin = 8, repMax = 12;
-  if (goal === 'strength') { repMin = 4; repMax = 6; }
-  if (goal === 'endurance') { repMin = 15; repMax = 20; }
-
-  // Определяем время отдыха под цель
-  let restSec = 90; // По умолчанию для массы
-  if (goal === 'strength') restSec = 180; // 3 минуты для силы
-  if (goal === 'endurance') restSec = 60; // 1 минута для выносливости
 
   const hasLegs = !excludedGroups.includes('Ноги');
   const plans = {};
 
+  // === 6. СОЗДАНИЕ ДНЕЙ ===
   const createDay = (title, targetRawMuscles) => {
     const exercises = [];
     const shuffledMuscles = [...targetRawMuscles].sort(() => Math.random() - 0.5);
@@ -95,10 +131,12 @@ export function generatePlan(options) {
     
     trimmed.forEach(id => {
       const baseEx = EXERCISES[id];
-      let finalSets = baseEx.sets; 
-      if (exp === 'advanced') finalSets += 1; 
+      
+      let finalSets = baseEx.sets + setsMod;
+      if (isTeen) finalSets = Math.min(3, finalSets); // Подросткам максимум 3 подхода
+      finalSets = Math.max(2, Math.min(8, finalSets)); // Защита
 
-      schemes[id] = { sets: finalSets, repMin, repMax, restSec };
+      schemes[id] = { sets: finalSets, repMin, repMax, restSec: finalRest };
     });
     
     return { title, exercises: trimmed, schemes };
