@@ -1,11 +1,11 @@
 /**
  * GymRise
  * Файл: sw.js
- * Версия: 98.0.0
+ * Версия: 99.0.0
  * Автор и правообладатель: © Alexulyanovsk
  */
 
-const CACHE_NAME = 'gymrise-v98';
+const CACHE_NAME = 'gymrise-v99';
 
 const APP_SHELL = [
   './',
@@ -26,7 +26,8 @@ const APP_SHELL = [
   './js/bridge.js',
   './js/utils.js',
   './js/generator.js',
-  './js/share.js'
+  './js/share.js',
+  './js/femaleBody.js'
 ];
 
 function safePut(cache, request, response) {
