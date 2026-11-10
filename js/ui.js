@@ -1,9 +1,9 @@
 /**
  * GymRise
  * Файл: js/ui.js
- * Версия: 20.0.0
+ * Версия: 23.0.0
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Применяем динамический restSec из схемы упражнения.
+ * Описание: Добавлены рост и возраст, передача данных в генератор.
  */
 
 import {
@@ -617,7 +617,7 @@ function renderGeneratorOnboarding() {
   return `<div class="modal-backdrop" id="generatorDialogBackdrop">
     <div class="modal">
       <h3 style="margin-bottom:16px;">Расскажите о себе</h3>
-      <p class="dim small" style="margin-bottom:20px;">Это нужно один раз — чтобы подобрать безопасный стартовый вес.</p>
+      <p class="dim small" style="margin-bottom:20px;">Это нужно один раз — чтобы подобрать безопасный стартовый вес и отдых.</p>
 
       <div style="margin-bottom:12px;">
         <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Пол</div>
@@ -630,6 +630,16 @@ function renderGeneratorOnboarding() {
       <div style="margin-bottom:12px;">
         <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Вес тела (кг)</div>
         <input type="number" class="modal-input" id="profileBodyWeight" value="${p.bodyWeight}" min="30" max="200" step="0.5" inputmode="decimal" placeholder="80">
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Рост (см)</div>
+        <input type="number" class="modal-input" id="profileHeight" value="${p.height || 175}" min="100" max="250" step="1" inputmode="numeric" placeholder="175">
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div class="progress-label" style="color:var(--text-muted); margin-bottom:8px;">Возраст</div>
+        <input type="number" class="modal-input" id="profileAge" value="${p.age || 30}" min="14" max="90" step="1" inputmode="numeric" placeholder="30">
       </div>
 
       <div style="margin-bottom:24px;">
@@ -800,7 +810,7 @@ function applyProgression(exId, ex, tempSets) {
   const step3 = Math.max(ex.repMin + 4, ex.repMax); 
 
   if (wState.targetReps >= step3) {
-    return true; // Пора спрашивать про вес
+    return true;
   }
 
   wState.targetReps = (wState.targetReps === step1) ? step2 : step3;
@@ -901,7 +911,6 @@ async function doneSet() {
     haptic('medium');
     saveState();
 
-    // ИСПОЛЬЗУЕМ ДИНАМИЧЕСКИЙ ТАЙМЕР
     const restTime = ex.restSec || LIMITS.restSec;
     startRest(restTime);
     
@@ -1074,12 +1083,20 @@ function profileSetExp(el) {
 
 function profileNext() {
   const bwInput = document.getElementById('profileBodyWeight');
+  const hInput = document.getElementById('profileHeight');
+  const aInput = document.getElementById('profileAge');
+  
   const bw = Number(bwInput?.value);
-  if (!Number.isFinite(bw) || bw < 30 || bw > 200) {
-    uiAlert('Введите корректный вес (30–200 кг)');
-    return;
-  }
+  const h = Number(hInput?.value);
+  const a = Number(aInput?.value);
+
+  if (!Number.isFinite(bw) || bw < 30 || bw > 200) { uiAlert('Введите корректный вес (30–200 кг)'); return; }
+  if (!Number.isFinite(h) || h < 100 || h > 250) { uiAlert('Введите корректный рост (100–250 см)'); return; }
+  if (!Number.isFinite(a) || a < 14 || a > 90) { uiAlert('Введите корректный возраст (14–90 лет)'); return; }
+
   state.profile.bodyWeight = bw;
+  state.profile.height = h;
+  state.profile.age = a;
   state.profile.onboarded = true;
   saveState();
   render();
@@ -1104,7 +1121,11 @@ async function applyGeneratedPlan() {
     exp: state.profile.exp,
     daysPerWeek: generatorOptions.days,
     equipment: generatorOptions.equipment,
-    excludedGroups: generatorOptions.excludedGroups
+    excludedGroups: generatorOptions.excludedGroups,
+    bodyWeight: state.profile.bodyWeight,
+    height: state.profile.height,
+    age: state.profile.age,
+    gender: state.profile.gender
   });
 
   if (!newPlans) {
