@@ -2,11 +2,11 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Добавлен импорт state для проверки пола.
+ * Описание: Добавлен try/catch для женской карты, чтобы избежать падения.
  */
 
 import { EXERCISES } from './data.js';
-import { state } from './state.js'; // <-- ДОБАВЛЕН ИМПОРТ
+import { state } from './state.js'; 
 import { femaleFront, femaleBack, FEMALE_FRONT_VIEWBOX, FEMALE_BACK_VIEWBOX } from './femaleBody.js';
 
 const MUSCLE_MAP = {
@@ -188,18 +188,21 @@ export async function generateShareCard(historyItem) {
   let frontImg = null;
   let backImg = null;
 
-  // Если это девушка, строим SVG локально
-  if (state.profile.gender === 'female') {
-    const frontSvg = buildFemaleSvg(hitMuscles, false);
-    const backSvg = buildFemaleSvg(hitMuscles, true);
-    frontImg = await svgStringToImage(frontSvg);
-    backImg = await svgStringToImage(backSvg);
-  } else {
-    // Если мужчина, используем старый метод с fetch
-    [frontImg, backImg] = await Promise.all([
-      loadAndColorSvg('./assets/body-front.svg', hitMuscles),
-      loadAndColorSvg('./assets/body-back.svg', hitMuscles)
-    ]);
+  // БЕЗОПАСНАЯ ЛОГИКА: Если женская карта упадет, приложение не сломается
+  try {
+    if (state.profile && state.profile.gender === 'female') {
+      const frontSvg = buildFemaleSvg(hitMuscles, false);
+      const backSvg = buildFemaleSvg(hitMuscles, true);
+      frontImg = await svgStringToImage(frontSvg);
+      backImg = await svgStringToImage(backSvg);
+    } else {
+      [frontImg, backImg] = await Promise.all([
+        loadAndColorSvg('./assets/body-front.svg', hitMuscles),
+        loadAndColorSvg('./assets/body-back.svg', hitMuscles)
+      ]);
+    }
+  } catch (e) {
+    console.error('Ошибка при создании карты мышц:', e);
   }
 
   ctx.textAlign = 'center';
