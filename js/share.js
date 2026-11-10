@@ -2,36 +2,66 @@
  * GymRise
  * Файл: js/share.js
  * Автор и правообладатель: © Alexulyanovsk
- * Описание: Уникальное имя файла для предотвращения кэширования в мессенджерах.
+ * Описание: Поддержка женской фигуры для карты мышц.
  */
 
 import { EXERCISES } from './data.js';
+import { femaleFront, femaleBack, FEMALE_FRONT_VIEWBOX, FEMALE_BACK_VIEWBOX } from './femaleBody.js';
 
 const MUSCLE_MAP = {
-  'Грудь': ['pectorals'],
-  'Спина': ['lowerback', 'trapezoidback', 'trapezoid'],
-  'Плечи (Перед/Сред)': ['deltoids', 'backdeltoids'],
-  'Плечи (Зад)': ['backdeltoids'],
+  'Грудь': ['chest'],
+  'Спина': ['upper-back', 'lower-back', 'trapezius'],
+  'Плечи (Перед/Сред)': ['deltoids'],
+  'Плечи (Зад)': ['deltoids'],
   'Бицепс': ['biceps'],
   'Трицепс': ['triceps'],
-  'Кор': ['abdomen'],
+  'Кор': ['abs', 'obliques'],
   'Квадрицепс': ['quadriceps'],
-  'Бицепс бедра': ['hamstrings'],
-  'Ягодицы': ['gluteus', 'abductors'],
-  'Икры': ['gastrocnemius', 'tibialis', 'lowerleg']
+  'Бицепс бедра': ['hamstring'],
+  'Ягодицы': ['gluteal'],
+  'Икры': ['calves', 'tibialis']
 };
+
+// Функция для сборки женской SVG-строки
+function buildFemaleSvg(hitMuscles, isBack) {
+  const paths = isBack ? femaleBack : femaleFront;
+  const viewBox = isBack ? FEMALE_BACK_VIEWBOX : FEMALE_FRONT_VIEWBOX;
+  
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">`;
+  
+  // 1. Сначала рисуем ВСЕ мышцы темно-серым
+  for (const [slug, pathArr] of Object.entries(paths)) {
+    for (const p of pathArr) {
+      svg += `<path d="${p}" fill="#1C1C21" />`;
+    }
+  }
+
+  // 2. Затем рисуем нагруженные мышцы лаймовым поверх них
+  hitMuscles.forEach(group => {
+    const slugs = MUSCLE_MAP[group] || [];
+    slugs.forEach(slug => {
+      if (paths[slug]) {
+        for (const p of paths[slug]) {
+          svg += `<path d="${p}" fill="#CCFF00" />`;
+        }
+      }
+    });
+  });
+
+  svg += '</svg>';
+  return svg;
+}
 
 async function loadAndColorSvg(svgPath, hitMuscles) {
   try {
     const response = await fetch(svgPath);
-    if (!response.ok) throw new Error('Fetch failed: ' + response.status);
+    if (!response.ok) return null; 
     
     const svgText = await response.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
     
     doc.querySelectorAll('style').forEach(el => el.remove());
-    
     const svgEl = doc.documentElement;
     svgEl.setAttribute('width', '277');
     svgEl.setAttribute('height', '495');
@@ -72,16 +102,23 @@ async function loadAndColorSvg(svgPath, hitMuscles) {
     return await new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => {
-        console.error('Image load error', svgPath);
-        resolve(null);
-      };
+      img.onerror = () => resolve(null);
       img.src = url;
     });
   } catch (e) {
-    console.error('SVG error', svgPath, e);
     return null;
   }
+}
+
+// Конвертирует локальную SVG-строку в картинку
+async function svgStringToImage(svgStr) {
+  const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgStr)}`;
+  return await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 export async function generateShareCard(historyItem) {
@@ -147,10 +184,22 @@ export async function generateShareCard(historyItem) {
     if (base) hitMuscles.add(base.muscle);
   });
 
-  const [frontImg, backImg] = await Promise.all([
-    loadAndColorSvg('./assets/body-front.svg', hitMuscles),
-    loadAndColorSvg('./assets/body-back.svg', hitMuscles)
-  ]);
+  let frontImg = null;
+  let backImg = null;
+
+  // Если это девушка, строим SVG локально
+  if (state.profile.gender === 'female') {
+    const frontSvg = buildFemaleSvg(hitMuscles, false);
+    const backSvg = buildFemaleSvg(hitMuscles, true);
+    frontImg = await svgStringToImage(frontSvg);
+    backImg = await svgStringToImage(backSvg);
+  } else {
+    // Если мужчина, используем старый метод с fetch
+    [frontImg, backImg] = await Promise.all([
+      loadAndColorSvg('./assets/body-front.svg', hitMuscles),
+      loadAndColorSvg('./assets/body-back.svg', hitMuscles)
+    ]);
+  }
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8E8E93';
@@ -178,7 +227,6 @@ export async function generateShareCard(historyItem) {
     canvas.toBlob(async (blob) => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
       
-      // ИСПОЛЬЗУЕМ УНИКАЛЬНОЕ ИМЯ ФАЙЛА
       const uniqueFileName = `gymrise_${historyItem.ts}.png`;
       const file = new File([blob], uniqueFileName, { type: 'image/png' });
 
