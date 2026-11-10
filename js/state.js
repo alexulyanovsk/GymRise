@@ -28,7 +28,7 @@ export function getExScheme(dayId, exId) {
     sets: Number.isFinite(o.sets) ? o.sets : base.sets,
     repMin: Number.isFinite(o.repMin) ? o.repMin : base.repMin,
     repMax: Number.isFinite(o.repMax) ? o.repMax : base.repMax,
-    restSec: Number.isFinite(o.restSec) ? o.restSec : LIMITS.restSec // <-- Читаем время отдыха
+    restSec: Number.isFinite(o.restSec) ? o.restSec : LIMITS.restSec
   };
 }
 
@@ -55,18 +55,25 @@ function sanitizeDaySchemes(d, exIdSet) {
     
     d.schemes[exId] = { 
       sets, repMin, repMax, 
-      restSec: (Number.isFinite(restSec) && restSec >= 15 && restSec <= 600) ? restSec : 90 // <-- Валидация времени отдыха
+      restSec: (Number.isFinite(restSec) && restSec >= 15 && restSec <= 600) ? restSec : 90
     };
   }
 }
 
 export function sanitizeState() {
   if (!state.profile || typeof state.profile !== 'object') {
-    state.profile = { gender: 'male', bodyWeight: 80, exp: 'intermediate', onboarded: false };
+    state.profile = { gender: 'male', bodyWeight: 80, height: 175, age: 30, exp: 'intermediate', onboarded: false };
   } else {
     if (state.profile.gender !== 'male' && state.profile.gender !== 'female') state.profile.gender = 'male';
     const bw = Number(state.profile.bodyWeight);
     state.profile.bodyWeight = (Number.isFinite(bw) && bw >= 30 && bw <= 200) ? bw : 80;
+    
+    const h = Number(state.profile.height);
+    state.profile.height = (Number.isFinite(h) && h >= 100 && h <= 250) ? h : 175;
+    
+    const ag = Number(state.profile.age);
+    state.profile.age = (Number.isFinite(ag) && ag >= 14 && ag <= 90) ? ag : 30; 
+    
     if (!['beginner', 'intermediate', 'advanced'].includes(state.profile.exp)) state.profile.exp = 'intermediate';
     state.profile.onboarded = !!state.profile.onboarded;
   }
@@ -326,7 +333,7 @@ export async function importData(file) {
         state.generatorOpen = false;
         state.libFilter = 'Все';
         state.libSearch = '';
-        state.profile = { gender: 'male', bodyWeight: 80, exp: 'intermediate', onboarded: false };
+        state.profile = { gender: 'male', bodyWeight: 80, height: 175, age: 30, exp: 'intermediate', onboarded: false };
 
         await loadState();
         sanitizeState();
@@ -384,10 +391,31 @@ export function startValues(dayId, exId) {
     return { weight: w, reps: targetReps };
   }
 
-  const kGender = state.profile.gender === 'female' ? 0.55 : 1.0;
-  const kExp = state.profile.exp === 'beginner' ? 0.75 : state.profile.exp === 'advanced' ? 1.25 : 1.0;
-  const kBw = Math.min(1.3, Math.max(0.7, state.profile.bodyWeight / 80));
-  const scaleFactor = kGender * kExp * kBw;
+  // --- УМНЫЙ РАСЧЕТ СТАРТОВОГО ВЕСА ---
+  const age = state.profile.age || 30;
+  const bmi = state.profile.bodyWeight / Math.pow(state.profile.height / 100, 2);
+  const isLower = ['Квадрицепс', 'Бицепс бедра', 'Ягодицы', 'Икры'].includes(ex.muscle);
+
+  let kGender = 1.0;
+  if (state.profile.gender === 'female') {
+    kGender = isLower ? 0.65 : 0.55; // Низ у женщин сильнее относительно верха
+  }
+
+  let kAge = 1.0;
+  if (age >= 70) kAge = 0.65;
+  else if (age >= 60) kAge = 0.75;
+  else if (age >= 50) kAge = 0.85;
+  else if (age < 18) kAge = 0.7; // Подросткам легкие веса для техники
+
+  let kBMI = 1.0;
+  if (bmi < 18.5) kBMI = 0.9;
+  else if (bmi >= 25) kBMI = 1.05;
+
+  let kExp = 1.0;
+  if (state.profile.exp === 'beginner') kExp = 0.75;
+  else if (state.profile.exp === 'advanced') kExp = 1.1;
+
+  const scaleFactor = kGender * kAge * kBMI * kExp;
 
   w = ex.wMin * scaleFactor;
 
